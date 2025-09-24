@@ -1,0 +1,51 @@
+{
+  "api": {
+    "base_url": "https://fapi.binance.com",
+    "ws_url": "wss://fstream.binance.com",
+    "key_file": "key.txt"
+  },
+  "trading": {
+    "symbol": "ETHUSDC",
+    "position_side": "LONG",
+    "min_order_qty": 0.005,
+    "grids": {
+      "x_segment": {
+        "enabled": true,
+        "price_min": 4100.0,
+        "price_max": 4190.0,
+        "step_size": 10.0,
+        "order_qty": 0.01,
+        "max_buy_orders": 8,
+        "max_sell_orders": 8
+      },
+      "a_segment": {
+        "enabled": false,
+        "price_min": 3900.0,
+        "price_max": 4100.0,
+        "step_size": 10.0,
+        "order_qty": 0.015,
+        "max_buy_orders": 10,
+        "max_sell_orders": 10
+      },
+      "b_segment": {
+        "enabled": false,
+        "price_min": 4190.0,
+        "price_max": 4400.0,
+        "step_size": 10.0,
+        "order_qty": 0.008,
+        "max_buy_orders": 10,
+        "max_sell_orders": 10
+      }
+    }
+  },
+  "system": {
+    "data_dir": "./data",
+    "log_level": "info",
+    "snapshot_interval": 60,
+    "max_events_before_snapshot": 100,
+    "ws_ping_interval": 20,
+    "ws_timeout": 25,
+    "degraded_poll_interval": 2,
+    "recv_window": 5000
+  }
+}

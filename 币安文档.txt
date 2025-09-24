@@ -1,0 +1,3193 @@
+U本位合约交易接口WebSocket API下单(TRADE)
+下单 (TRADE)
+接口描述
+下单
+
+方式
+order.place
+
+请求
+order.place
+
+{
+    "id": "3f7df6e3-2df4-44b9-9919-d2f38f90a99a",
+    "method": "order.place",
+    "params": {
+        "apiKey": "HMOchcfii9ZRZnhjp2XjGXhsOBd6msAhKz9joQaWwZ7arcJTlD2hGPHQj1lGdTjR",
+        "positionSide": "BOTH",
+        "price": 43187.00,
+        "quantity": 0.1,
+        "side": "BUY",
+        "symbol": "BTCUSDT",
+        "timeInForce": "GTC",
+        "timestamp": 1702555533821,
+        "type": "LIMIT",
+        "signature": "0f04368b2d22aafd0ggc8809ea34297eff602272917b5f01267db4efbc1c9422"
+    }
+}
+
+请求权重
+0
+
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+side	ENUM	YES	买卖方向 SELL, BUY
+positionSide	ENUM	NO	持仓方向，单向持仓模式下非必填，默认且仅可填BOTH;在双向持仓模式下必填,且仅可选择 LONG 或 SHORT
+type	ENUM	YES	订单类型 LIMIT, MARKET, STOP, TAKE_PROFIT, STOP_MARKET, TAKE_PROFIT_MARKET, TRAILING_STOP_MARKET
+reduceOnly	STRING	NO	true, false; 非双开模式下默认false；双开模式下不接受此参数； 使用closePosition不支持此参数。
+quantity	DECIMAL	NO	下单数量,使用closePosition不支持此参数。
+price	DECIMAL	NO	委托价格
+newClientOrderId	STRING	NO	用户自定义的订单号，不可以重复出现在挂单中。如空缺系统会自动赋值。必须满足正则规则 ^[\.A-Z\:/a-z0-9_-]{1,36}$
+stopPrice	DECIMAL	NO	触发价, 仅 STOP, STOP_MARKET, TAKE_PROFIT, TAKE_PROFIT_MARKET 需要此参数
+closePosition	STRING	NO	true, false；触发后全部平仓，仅支持STOP_MARKET和TAKE_PROFIT_MARKET；不与quantity合用；自带只平仓效果，不与reduceOnly 合用
+activationPrice	DECIMAL	NO	追踪止损激活价格，仅TRAILING_STOP_MARKET 需要此参数, 默认为下单当前市场价格(支持不同workingType)
+callbackRate	DECIMAL	NO	追踪止损回调比例，可取值范围[0.1, 10],其中 1代表1% ,仅TRAILING_STOP_MARKET 需要此参数
+timeInForce	ENUM	NO	有效方法
+workingType	ENUM	NO	stopPrice 触发类型: MARK_PRICE(标记价格), CONTRACT_PRICE(合约最新价). 默认 CONTRACT_PRICE
+priceProtect	STRING	NO	条件单触发保护："TRUE","FALSE", 默认"FALSE". 仅 STOP, STOP_MARKET, TAKE_PROFIT, TAKE_PROFIT_MARKET 需要此参数
+newOrderRespType	ENUM	NO	"ACK", "RESULT", 默认 "ACK"
+priceMatch	ENUM	NO	OPPONENT/ OPPONENT_5/ OPPONENT_10/ OPPONENT_20/QUEUE/ QUEUE_5/ QUEUE_10/ QUEUE_20；不能与price同时传
+selfTradePreventionMode	ENUM	NO	NONE / EXPIRE_TAKER/ EXPIRE_MAKER/ EXPIRE_BOTH； 默认NONE
+goodTillDate	LONG	NO	TIF为GTD时订单的自动取消时间， 当timeInforce为GTD时必传；传入的时间戳仅保留秒级精度，毫秒级部分会被自动忽略，时间戳需大于当前时间+600s且小于253402300799000
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+根据 order type的不同，某些参数强制要求，具体如下:
+
+Type	强制要求的参数
+LIMIT	timeInForce, quantity, price或priceMatch
+MARKET	quantity
+STOP, TAKE_PROFIT	quantity, stopPrice
+STOP_MARKET, TAKE_PROFIT_MARKET	stopPrice, price或priceMatch
+TRAILING_STOP_MARKET	callbackRate
+条件单的触发必须:
+
+如果订单参数priceProtect为true:
+达到触发价时，MARK_PRICE(标记价格)与CONTRACT_PRICE(合约最新价)之间的价差不能超过改symbol触发保护阈值
+触发保护阈值请参考接口GET /fapi/v1/exchangeInfo 返回内容相应symbol中"triggerProtect"字段
+STOP, STOP_MARKET 止损单:
+买入: 最新合约价格/标记价格高于等于触发价stopPrice
+卖出: 最新合约价格/标记价格低于等于触发价stopPrice
+TAKE_PROFIT, TAKE_PROFIT_MARKET 止盈单:
+买入: 最新合约价格/标记价格低于等于触发价stopPrice
+卖出: 最新合约价格/标记价格高于等于触发价stopPrice
+TRAILING_STOP_MARKET 跟踪止损单:
+买入: 当合约价格/标记价格区间最低价格低于激活价格activationPrice,且最新合约价格/标记价高于等于最低价设定回调幅度。
+卖出: 当合约价格/标记价格区间最高价格高于激活价格activationPrice,且最新合约价格/标记价低于等于最高价设定回调幅度。
+TRAILING_STOP_MARKET 跟踪止损单如果遇到报错 {"code": -2021, "msg": "Order would immediately trigger."}
+表示订单不满足以下条件:
+
+买入: 指定的activationPrice 必须小于 latest price
+卖出: 指定的activationPrice 必须大于 latest price
+newOrderRespType 如果传 RESULT:
+
+MARKET 订单将直接返回成交结果；
+配合使用特殊 timeInForce 的 LIMIT 订单将直接返回成交或过期拒绝结果。
+STOP_MARKET, TAKE_PROFIT_MARKET 配合 closePosition=true:
+
+条件单触发依照上述条件单触发逻辑
+条件触发后，平掉当时持有所有多头仓位(若为卖单)或当时持有所有空头仓位(若为买单)
+不支持 quantity 参数
+自带只平仓属性，不支持reduceOnly参数
+双开模式下,LONG方向上不支持BUY; SHORT 方向上不支持SELL
+响应示例
+{
+    "id": "3f7df6e3-2df4-44b9-9919-d2f38f90a99a",
+    "status": 200,
+    "result": {
+        "orderId": 325078477,
+        "symbol": "BTCUSDT",
+        "status": "NEW",
+        "clientOrderId": "iCXL1BywlBaf2sesNUrVl3",
+        "price": "43187.00",
+        "avgPrice": "0.00",
+        "origQty": "0.100",
+        "executedQty": "0.000",
+        "cumQty": "0.000",
+        "cumQuote": "0.00000",
+        "timeInForce": "GTC",
+        "type": "LIMIT",
+        "reduceOnly": false,
+        "closePosition": false,
+        "side": "BUY",
+        "positionSide": "BOTH",
+        "stopPrice": "0.00",
+        "workingType": "CONTRACT_PRICE",
+        "priceProtect": false,
+        "origType": "LIMIT",
+        "priceMatch": "NONE",
+        "selfTradePreventionMode": "NONE",
+        "goodTillDate": 0,
+        "updateTime": 1702555534435
+    },
+    "rateLimits": [
+        {
+            "rateLimitType": "ORDERS",
+            "interval": "SECOND",
+            "intervalNum": 10,
+            "limit": 300,
+            "count": 1
+        },
+        {
+            "rateLimitType": "ORDERS",
+            "interval": "MINUTE",
+            "intervalNum": 1,
+            "limit": 1200,
+            "count": 1
+        },
+        {
+            "rateLimitType": "REQUEST_WEIGHT",
+            "interval": "MINUTE",
+            "intervalNum": 1,
+            "limit": 2400,
+            "count": 1
+        }
+    ]
+}
+
+U本位合约交易接口WebSocket API修改订单(TRADE)
+修改订单 (TRADE)
+接口描述
+修改订单功能，当前只支持限价（LIMIT）订单修改，修改后会在撮合队列里重新排序
+
+方式
+order.modify
+
+请求
+{
+    "id": "c8c271ba-de70-479e-870c-e64951c753d9",
+    "method": "order.modify",
+    "params": {
+        "apiKey": "HMOchcfiT9ZRZnhjp2XjGXhsOBd6msAhKz9joQaWwZ7arcJTlD2hGPHQj1lGdTjR",
+        "orderId": 328971409,
+        "origType": "LIMIT",
+        "positionSide": "SHORT",
+        "price": "43769.1",
+        "priceMatch": "NONE",
+        "quantity": "0.11",
+        "side": "SELL",
+        "symbol": "BTCUSDT",
+        "timestamp": 1703426755754,
+        "signature": "d30c9f0736a307f5a9988d4a40b688662d18324b17367d51421da5484e835923"
+    }
+}
+
+请求权重
+10s order rate limit(X-MBX-ORDER-COUNT-10S)为1 1min order rate limit(X-MBX-ORDER-COUNT-1M)为1 IP rate limit(x-mbx-used-weight-1m)为1
+
+请求参数
+名称	类型	是否必需	描述
+orderId	LONG	NO	系统订单号
+origClientOrderId	STRING	NO	用户自定义的订单号
+symbol	STRING	YES	交易对
+side	ENUM	YES	买卖方向 SELL, BUY
+quantity	DECIMAL	YES	下单数量,使用closePosition不支持此参数。
+price	DECIMAL	YES	委托价格
+priceMatch	ENUM	NO	OPPONENT/ OPPONENT_5/ OPPONENT_10/ OPPONENT_20/QUEUE/ QUEUE_5/ QUEUE_10/ QUEUE_20；不能与price同时传
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+orderId 与 origClientOrderId 必须至少发送一个，同时发送则以 order id为准
+quantity 与 price 均必须发送，这点和 dapi 修改订单不同
+当新订单的quantity 或 price不满足PRICE_FILTER / PERCENT_FILTER / LOT_SIZE限制，修改会被拒绝，原订单依旧被保留
+订单会在下列情况下被取消：
+原订单被部分执行且新订单quantity <= executedQty
+原订单是GTX，新订单的价格会导致订单立刻执行
+同一订单修改次数最多10000次
+响应示例
+{
+    "id": "c8c271ba-de70-479e-870c-e64951c753d9",
+    "status": 200,
+    "result": {
+        "orderId": 328971409,
+        "symbol": "BTCUSDT",
+        "status": "NEW",
+        "clientOrderId": "xGHfltUMExx0TbQstQQfRX",
+        "price": "43769.10",
+        "avgPrice": "0.00",
+        "origQty": "0.110",
+        "executedQty": "0.000",
+        "cumQty": "0.000",
+        "cumQuote": "0.00000",
+        "timeInForce": "GTC",
+        "type": "LIMIT",
+        "reduceOnly": false,
+        "closePosition": false,
+        "side": "SELL",
+        "positionSide": "SHORT",
+        "stopPrice": "0.00",
+        "workingType": "CONTRACT_PRICE",
+        "priceProtect": false,
+        "origType": "LIMIT",
+        "priceMatch": "NONE",
+        "selfTradePreventionMode": "NONE",
+        "goodTillDate": 0,
+        "updateTime": 1703426756190
+    },
+    "rateLimits": [
+        {
+            "rateLimitType": "ORDERS",
+            "interval": "SECOND",
+            "intervalNum": 10,
+            "limit": 300,
+            "count": 1
+        },
+        {
+            "rateLimitType": "ORDERS",
+            "interval": "MINUTE",
+            "intervalNum": 1,
+            "limit": 1200,
+            "count": 1
+        },
+        {
+            "rateLimitType": "REQUEST_WEIGHT",
+            "interval": "MINUTE",
+            "intervalNum": 1,
+            "limit": 2400,
+            "count": 1
+        }
+    ]
+}
+
+U本位合约交易接口WebSocket API撤销订单(TRADE)
+撤销订单 (TRADE)
+接口描述
+撤销订单
+
+方式
+order.cancel
+
+请求
+{
+   	"id": "5633b6a2-90a9-4192-83e7-925c90b6a2fd",
+    "method": "order.cancel", 
+    "params": { 
+        "apiKey": "HsOehcfih8ZRxnhjp2XjGXhsOBd6msAhKz9joQaWwZ7arcJTlD2hGOGQj1lGdTjR", 
+        "orderId": 283194212, 
+        "symbol": "BTCUSDT", 
+        "timestamp": 1703439070722, 
+        "signature": "b09c49815b4e3f1f6098cd9fbe26a933a9af79803deaaaae03c29f719c08a8a8" 
+    }
+}
+
+请求权重
+1
+
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+orderId	LONG	NO	系统订单号
+origClientOrderId	STRING	NO	用户自定义的订单号
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+orderId 与 origClientOrderId 必须至少发送一个
+响应示例
+{
+  "id": "5633b6a2-90a9-4192-83e7-925c90b6a2fd",
+  "status": 200,
+  "result": {
+    "clientOrderId": "myOrder1",
+    "cumQty": "0",
+    "cumQuote": "0",
+    "executedQty": "0",
+    "orderId": 283194212,
+    "origQty": "11",
+    "origType": "TRAILING_STOP_MARKET",
+    "price": "0",
+    "reduceOnly": false,
+    "side": "BUY",
+    "positionSide": "SHORT",
+    "status": "CANCELED",
+    "stopPrice": "9300",                
+    "closePosition": false,  
+    "symbol": "BTCUSDT",
+    "timeInForce": "GTC",
+    "type": "TRAILING_STOP_MARKET",
+    "activatePrice": "9020",            
+    "priceRate": "0.3",                
+    "updateTime": 1571110484038,
+    "workingType": "CONTRACT_PRICE",
+    "priceProtect": false,           
+    "priceMatch": "NONE",              
+    "selfTradePreventionMode": "NONE",
+    "goodTillDate": 0                 
+  },
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 1
+    }
+  ]
+}
+
+U本位合约交易接口WebSocket API查询订单(USER-DATA)
+查询订单 (USER_DATA)
+接口描述
+查询订单状态
+
+请注意，如果订单满足如下条件，不会被查询到：
+订单的最终状态为 CANCELED 或者 EXPIRED 并且 订单没有任何的成交记录 并且 订单生成时间 + 3天 < 当前时间
+订单创建时间 + 90天 < 当前时间
+方式
+order.status
+
+请求
+{
+    "id": "0ce5d070-a5e5-4ff2-b57f-1556741a4204",
+    "method": "order.status",
+    "params": {
+        "apiKey": "HMOchcfii9ZRZnhjp2XjGXhsOBd6msAhKz9joQaWwZ7arcJTlD2hGPHQj1lGdTjR",
+        "orderId": 328999071,
+        "symbol": "BTCUSDT",
+        "timestamp": 1703441060152,
+        "signature": "ba48184fc38a71d03d2b5435bd67c1206e3191e989fe99bda1bc643a880dfdbf"
+    }
+}
+
+请求权重
+1
+
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+orderId	LONG	NO	系统订单号
+origClientOrderId	STRING	NO	用户自定义的订单号
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+注意:
+
+至少需要发送 orderId 与 origClientOrderId中的一个
+orderId在symbol维度是自增的
+响应示例
+{
+  	"avgPrice": "0.00000",				// 平均成交价
+  	"clientOrderId": "abc",				// 用户自定义的订单号
+  	"cumQuote": "0",					// 成交金额
+  	"executedQty": "0",					// 成交量
+  	"orderId": 1573346959,				// 系统订单号
+  	"origQty": "0.40",					// 原始委托数量
+  	"origType": "TRAILING_STOP_MARKET",	// 触发前订单类型
+  	"price": "0",						// 委托价格
+  	"reduceOnly": false,				// 是否仅减仓
+  	"side": "BUY",						// 买卖方向
+  	"positionSide": "SHORT", 			// 持仓方向
+  	"status": "NEW",					// 订单状态
+  	"stopPrice": "9300",			    // 触发价，对`TRAILING_STOP_MARKET`无效
+  	"closePosition": false,             // 是否条件全平仓
+  	"symbol": "BTCUSDT",				// 交易对
+  	"time": 1579276756075,				// 订单时间
+  	"timeInForce": "GTC",				// 有效方法
+  	"type": "TRAILING_STOP_MARKET",		// 订单类型
+  	"activatePrice": "9020",			// 跟踪止损激活价格, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+  	"priceRate": "0.3",					// 跟踪止损回调比例, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+  	"updateTime": 1579276756075,		// 更新时间
+  	"workingType": "CONTRACT_PRICE",    // 条件价格触发类型
+ 	"priceProtect": false               // 是否开启条件单触发保护
+}
+
+本位合约Websocket行情推送市场数据连接
+市场数据连接
+本篇所列出的所有wss接口需用下列方式连接：
+
+Base Url：wss://fstream.binance.com
+订阅单一stream格式为 /ws/<streamName>
+组合streams的URL格式为 /stream?streams=/<streamName1>/<streamName2>/<streamName3>
+连接样例：
+wss://fstream.binance.com/ws/bnbusdt@aggTrade
+wss://fstream.binance.com/stream?streams=bnbusdt@aggTrade/btcusdt@markPrice
+订阅组合streams时，事件payload会以这样的格式封装 {"stream":"<streamName<","data":<rawPayload>}
+
+stream名称中所有交易对均为小写。
+
+每个链接有效期不超过24小时，请妥善处理断线重连。
+
+服务端每3分钟会发送ping帧，客户端应当在10分钟内回复pong帧，否则服务端会主动断开链接。允许客户端发送不成对的pong帧(即客户端可以以高于15分钟每次的频率发送pong帧保持链接)。
+
+Websocket服务器每秒最多接受10个订阅消息。
+
+如果用户发送的消息超过限制，连接会被断开连接。反复被断开连接的IP有可能被服务器屏蔽。
+
+单个连接最多可以订阅 1024 个Streams。
+
+U本位合约Websocket行情推送实时订阅/取消数据流
+实时订阅/取消数据流
+以下数据可以通过websocket发送以实现订阅或取消订阅数据流。示例如下。
+响应内容中的id是无符号整数，作为往来信息的唯一标识。
+订阅一个信息流
+响应
+
+{
+  "result": null,
+  "id": 1
+}
+
+请求
+
+{
+"method": "SUBSCRIBE",
+"params":
+[
+"btcusdt@aggTrade",
+"btcusdt@depth"
+],
+"id": 1
+}
+
+取消订阅一个信息流
+响应
+
+{
+  "result": null,
+  "id": 312
+}
+
+请求
+
+{
+"method": "UNSUBSCRIBE",
+"params":
+[
+"btcusdt@depth"
+],
+"id": 312
+}
+
+已订阅信息流
+响应
+
+{
+  "result": [
+    "btcusdt@aggTrade"
+  ],
+  "id": 3
+}
+
+请求
+
+{
+"method": "LIST_SUBSCRIPTIONS",
+"id": 3
+}
+
+设定属性
+当前，唯一可以设置的属性是设置是否启用combined("组合")信息流。
+当使用/ws/("原始信息流")进行连接时，combined属性设置为false，而使用 /stream/进行连接时则将属性设置为true。
+
+响应
+
+{
+  "result": null
+  "id": 5
+}
+
+请求
+
+{
+"method": "SET_PROPERTY",
+"params":
+[
+"combined",
+true
+],
+"id": 5
+}
+
+检索属性
+响应
+
+{
+  "result": true, // Indicates that combined is set to true.
+  "id": 2
+}
+
+请求
+
+{
+"method": "GET_PROPERTY",
+"params":
+[
+"combined"
+],
+"id": 2
+}
+
+##错误信息
+
+错误信息	描述
+{"code": 0, "msg": "Unknown property"}	SET_PROPERTY 或 GET_PROPERTY中应用的参数无效
+{"code": 1, "msg": "Invalid value type: expected Boolean"}	仅接受true或false
+{"code": 2, "msg": "Invalid request: property name must be a string"}	提供的属性名无效
+{"code": 2, "msg": "Invalid request: request ID must be an unsigned integer"}	参数id未提供或id值是无效类型
+{"code": 2, "msg": "Invalid request: unknown variant %s, expected one of SUBSCRIBE, UNSUBSCRIBE, LIST_SUBSCRIPTIONS, SET_PROPERTY, GET_PROPERTY at line 1 column 28"}	错字提醒，或提供的值不是预期类型
+{"code": 2, "msg": "Invalid request: too many parameters"}	数据中提供了不必要参数
+{"code": 2, "msg": "Invalid request: property name must be a string"}	未提供属性名
+{"code": 2, "msg": "Invalid request: missing field method at line 1 column 73"}	数据未提供method
+{"code":3,"msg":"Invalid JSON: expected value at line %s column %s"}	JSON 语法有误.
+
+U本位合约Websocket行情推送最新标记价格
+最新标记价格
+数据流描述
+最新标记价格
+
+Stream Name
+<symbol>@markPrice 或 <symbol>@markPrice@1s
+
+更新速度
+3000ms 或 1000ms
+
+响应示例
+  {
+    "e": "markPriceUpdate",  	// 事件类型
+    "E": 1562305380000,      	// 事件时间
+    "s": "BTCUSDT",          	// 交易对
+    "p": "11794.15000000",   	// 标记价格
+    "i": "11784.62659091",		// 现货指数价格
+    "P": "11784.25641265",		// 预估结算价,仅在结算前最后一小时有参考价值
+    "r": "0.00038167",       	// 资金费率
+    "T": 1562306400000       	// 下次资金时间
+  }
+  
+  U本位合约Websocket账户信息推送账户信息流连接
+账户信息流连接
+本篇所列出REST接口的baseurl https://fapi.binance.com
+
+用于订阅账户数据的 listenKey 从创建时刻起有效期为60分钟
+
+可以通过PUT一个listenKey延长60分钟有效期，如收到-1125报错提示此listenKey不存在，建议重新使用POST /fapi/v1/listenKey生成listenKey
+
+可以通过DELETE一个 listenKey 立即关闭当前数据流，并使该listenKey 无效
+
+在具有有效listenKey的帐户上执行POST将返回当前有效的listenKey并将其有效期延长60分钟
+
+本篇所列出的websocket接口，连接方式如下：
+
+Base Url: wss://fstream.binance.com
+订阅账户数据流的stream名称为 /ws/`<listenKey>`
+连接样例：
+wss://fstream.binance.com/ws/XaEAKTsQSRLZAGH9tuIu37plSRsdjmlAVBoNYPUITlTAko1WI22PgmBMpI1rS8Yh
+每个链接有效期不超过24小时，请妥善处理断线重连。
+
+单一账户，单一连接的推送数据流消息可以保证时间序; 强烈建议您使用 E 字段进行排序
+
+考虑到剧烈行情下, RESTful接口可能存在查询延迟，我们强烈建议您优先从Websocket user data stream推送的消息来获取订单，仓位等信息。
+
+U本位合约Websocket账户信息推送生成listenKey(USER-STREAM)
+生成listenKey (USER_STREAM)
+接口描述
+创建一个新的user data stream，返回值为一个listenKey，即websocket订阅的stream名称。如果该帐户具有有效的listenKey，则将返回该listenKey并将其有效期延长60分钟。
+
+HTTP请求
+POST /fapi/v1/listenKey
+
+请求权重
+1
+
+请求参数
+None
+
+响应示例
+{
+  "listenKey": "pqia91ma19a5s61cv6a81va65sdf19v8a65a1a5s61cv6a81va65sdf19v8a65a1"
+}
+
+U本位合约Websocket账户信息推送延长listenKey有效期(USER-STREAM)
+延长listenKey有效期(USER_STREAM)
+接口描述
+有效期延长至本次调用后60分钟
+
+HTTP请求
+PUT /fapi/v1/listenKey
+
+请求权重
+1
+
+请求参数
+None
+
+{
+    "listenKey": "3HBntNTepshgEdjIwSUIBgB9keLyOCg5qv3n6bYAtktG8ejcaW5HXz9Vx1JgIieg" // 被延长的listenkey
+}
+
+U本位合约Websocket账户信息推送关闭listenKey(USER-STREAM)
+关闭listenKey (USER_STREAM)
+接口描述
+关闭某账户数据流
+
+HTTP请求
+DELETE /fapi/v1/listenKey
+
+请求权重
+1
+
+请求参数
+None
+
+响应示例
+{}
+
+U本位合约Websocket账户信息推送Websocket API生成listenKey(USER-STREAM)
+Websocket API生成listenKey (USER_STREAM)
+接口描述
+创建一个新的user data stream，返回值为一个listenKey，即websocket订阅的stream名称。如果该帐户具有有效的listenKey，则将返回该listenKey并将其有效期延长60分钟。
+
+方式
+userDataStream.start
+
+请求
+{
+  "id": "d3df8a61-98ea-4fe0-8f4e-0fcea5d418b0",
+  "method": "userDataStream.start",
+  "params": {
+    "apiKey": "vmPUZE6mv9SD5VNHk4HlWFsOr6aKE2zvsw0MuIgwCIPy6utIco14y7Ju91duEh8A"
+  }
+}
+
+请求权重
+1
+
+请求参数
+名称	类型	是否必需	描述
+apiKey	STRING	YES	
+响应示例
+{
+  "id": "d3df8a61-98ea-4fe0-8f4e-0fcea5d418b0",
+  "status": 200,
+  "result": {
+    "listenKey": "xs0mRXdAKlIPDRFrlPcw0qI41Eh3ixNntmymGyhrhgqo7L6FuLaWArTD7RLP"
+  },
+   "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 2
+    }
+  ]
+}
+
+U本位合约Websocket账户信息推送Websocket API延长listenKey有效期(USER-STREAM)
+Websocket API延长listenKey有效期(USER_STREAM)
+接口描述
+有效期延长至本次调用后60分钟
+
+方式
+userDataStream.ping
+
+请求
+{
+  "id": "815d5fce-0880-4287-a567-80badf004c74",
+  "method": "userDataStream.ping",
+  "params": {
+    "apiKey": "vmPUZE6mv9SD5VNHk9HlWFsOr9aLE2zvsw0MuIgwCIPy8atIco14y7Ju91duEh8A"
+   }
+}
+
+请求权重
+1
+
+请求参数
+None
+
+响应示例
+{
+  "id": "815d5fce-0880-4287-a567-80badf004c74",
+  "status": 200,
+  "result": {
+    "listenKey": "3HBntNTepshgEdjIwSUIBgB9keLyOCg5qv3n6bYAtktG8ejcaW5HXz9Vx1JgIieg"
+  },
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 2
+    }
+  ]
+}
+
+U本位合约Websocket账户信息推送Websocket API关闭listenKey(USER-STREAM)
+Websocket API关闭listenKey (USER_STREAM)
+接口描述
+关闭某账户数据流
+
+方式
+userDataStream.stop
+
+请求
+{
+  "id": "819e1b1b-8c06-485b-a13e-131326c69599",
+  "method": "userDataStream.stop",
+  "params": {
+    "apiKey": "vmPUZE6mv9SD5VNHk9HlWFsOr9aLE2zvsw0MuIgwCIPy8atIco14y7Ju91duEh8A"
+  }
+}
+
+请求权重
+1
+
+请求参数
+None
+
+响应示例
+{
+  "id": "819e1b1b-8c06-485b-a13e-131326c69599",
+  "status": 200,
+  "result": {},
+   "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 2
+    }
+  ]
+}
+
+U本位合约Websocket账户信息推送listenKey过期推送
+listenKey过期推送
+事件描述
+当前连接使用的有效listenKey过期时，user data stream 将会推送此事件。
+
+注意:
+
+此事件与 websocket 连接中断没有必然联系
+只有正在连接中的有效listenKey过期时才会收到此消息
+收到此消息后 user data stream 将不再更新，直到用户使用新的有效的listenKey
+事件类型
+listenKeyExpired
+
+响应示例
+{
+    "e": "listenKeyExpired",    // 事件类型
+    "E": "1736996475556",       // 事件时间
+    "listenKey":"WsCMN0a4KHUPTQuX6IUnqEZfB1inxmv1qR4kbf1LuEjur5VdbzqvyxqG9TSjVVxv"
+}
+
+U本位合约Websocket账户信息推送Balance和Position更新推送
+Balance 和 Position 更新推送
+事件描述
+账户更新事件的 event type 固定为 ACCOUNT_UPDATE
+
+当账户信息有变动时，会推送此事件：
+
+仅当账户信息有变动时(包括资金、仓位、保证金模式等发生变化)，才会推送此事件；
+订单状态变化没有引起账户和持仓变化的，不会推送此事件；
+position 信息：仅当 symbol 仓位有变动时推送。
+"FUNDING FEE" 引起的资金余额变化，仅推送简略事件：
+
+当用户某全仓持仓发生"FUNDING FEE"时，事件ACCOUNT_UPDATE将只会推送相关的用户资产余额信息B(仅推送 FUNDING FEE 发生相关的资产余额信息)，而不会推送任何持仓信息P。
+当用户某逐仓仓持仓发生"FUNDING FEE"时，事件ACCOUNT_UPDATE将只会推送相关的用户资产余额信息B(仅推送"FUNDING FEE"所使用的资产余额信息)，和相关的持仓信息P(仅推送这笔"FUNDING FEE"发生所在的持仓信息)，其余持仓信息不会被推送。
+字段"m"代表了事件推出的原因，包含了以下可能类型:
+
+DEPOSIT
+WITHDRAW
+ORDER
+FUNDING_FEE
+WITHDRAW_REJECT
+ADJUSTMENT
+INSURANCE_CLEAR
+ADMIN_DEPOSIT
+ADMIN_WITHDRAW
+MARGIN_TRANSFER
+MARGIN_TYPE_CHANGE
+ASSET_TRANSFER
+OPTIONS_PREMIUM_FEE
+OPTIONS_SETTLE_PROFIT
+AUTO_EXCHANGE
+COIN_SWAP_DEPOSIT
+COIN_SWAP_WITHDRAW
+字段"bc"代表了钱包余额的改变量，即 balance change，但注意其不包含仓位盈亏及交易手续费。
+
+事件类型
+ACCOUNT_UPDATE
+
+响应示例
+{
+  "e": "ACCOUNT_UPDATE",				// 事件类型
+  "E": 1564745798939,            		// 事件时间
+  "T": 1564745798938 ,           		// 撮合时间
+  "a":                          		// 账户更新事件
+    {
+      "m":"ORDER",						// 事件推出原因
+      "B":[                     		// 余额信息
+        {
+          "a":"USDT",           		// 资产名称
+          "wb":"122624.12345678",    	// 钱包余额
+          "cw":"100.12345678",			// 除去逐仓仓位保证金的钱包余额
+          "bc":"50.12345678"			// 除去盈亏与交易手续费以外的钱包余额改变量
+        },
+        {
+          "a":"BUSD",
+          "wb":"1.00000000",
+          "cw":"0.00000000",
+          "bc":"-49.12345678"
+        }
+      ],
+      "P":[
+       {
+          "s":"BTCUSDT",          	// 交易对
+          "pa":"0",               	// 仓位
+          "ep":"0.00000",            // 入仓价格
+          "bep":"0",                // 盈亏平衡价
+          "cr":"200",             	// (费前)累计实现损益
+          "up":"0",						// 持仓未实现盈亏
+          "mt":"isolated",				// 保证金模式
+          "iw":"0.00000000",			// 若为逐仓，仓位保证金
+          "ps":"BOTH"					// 持仓方向
+       }，
+       {
+        	"s":"BTCUSDT",
+        	"pa":"20",
+        	"ep":"6563.66500",
+        	"bep":"6563.6",
+        	"cr":"0",
+        	"up":"2850.21200",
+        	"mt":"isolated",
+        	"iw":"13200.70726908",
+        	"ps":"LONG"
+      	 },
+       {
+        	"s":"BTCUSDT",
+        	"pa":"-10",
+        	"ep":"6563.86000",
+        	"bep":"6563.6",
+        	"cr":"-45.04000000",
+        	"up":"-1423.15600",
+        	"mt":"isolated",
+        	"iw":"6570.42511771",
+        	"ps":"SHORT"
+       }
+      ]
+    }
+}
+
+U本位合约Websocket账户信息推送订单交易更新推送
+订单交易更新推送
+事件描述
+当有新订单创建、订单有新成交或者新的状态变化时会推送此类事件 事件类型统一为 ORDER_TRADE_UPDATE
+
+订单方向
+
+BUY 买入
+SELL 卖出
+订单类型
+
+LIMIT 限价单
+MARKET 市价单
+STOP 止损限价单
+STOP_MARKET 止损市价单
+TAKE_PROFIT 止盈限价单
+TAKE_PROFIT_MARKET 止盈市价单
+TRAILING_STOP_MARKET 跟踪止损单
+LIQUIDATION 爆仓
+本次事件的具体执行类型
+
+NEW
+CANCELED 已撤
+CALCULATED 订单 ADL 或爆仓
+EXPIRED 订单失效
+TRADE 交易
+AMENDMENT 订单修改
+订单状态
+
+NEW
+PARTIALLY_FILLED
+FILLED
+CANCELED
+EXPIRED
+EXPIRED_IN_MATCH
+有效方式:
+
+GTC
+IOC
+FOK
+GTX
+强平和ADL:
+
+若用户因保证金不足发生强平：
+c为"autoclose-XXX"，X为"NEW"
+若用户保证金充足但被 ADL:
+c为“adl_autoclose”，X为“NEW”
+事件类型
+ORDER_TRADE_UPDATE
+
+响应示例
+{
+  "e":"ORDER_TRADE_UPDATE",			// 事件类型
+  "E":1568879465651,				    // 事件时间
+  "T":1568879465650,				    // 撮合时间
+  "o":{
+    "s":"BTCUSDT",					    // 交易对
+    "c":"TEST",						      // 客户端自定订单ID
+      // 特殊的自定义订单ID:
+      // "autoclose-"开头的字符串: 系统强平订单
+      // "adl_autoclose": ADL自动减仓订单
+      // "settlement_autoclose-": 下架或交割的结算订单
+    "S":"SELL",						      // 订单方向
+    "o":"TRAILING_STOP_MARKET",	// 订单类型
+    "f":"GTC",						      // 有效方式
+    "q":"0.001",					      // 订单原始数量
+    "p":"0",						        // 订单原始价格
+    "ap":"0",						        // 订单平均价格
+    "sp":"7103.04",			        // 条件订单触发价格，对追踪止损单无效
+    "x":"NEW",						      // 本次事件的具体执行类型
+    "X":"NEW",						      // 订单的当前状态
+    "i":8886774,					      // 订单ID
+    "l":"0",						        // 订单末次成交量
+    "z":"0",						        // 订单累计已成交量
+    "L":"0",						        // 订单末次成交价格
+    "N": "USDT",                // 手续费资产类型
+    "n": "0",                   // 手续费数量
+    "T":1568879465650,				  // 成交时间
+    "t":0,							        // 成交ID
+    "b":"0",						        // 买单净值
+    "a":"9.91",						      // 卖单净值
+    "m": false,					        // 该成交是作为挂单成交吗？
+    "R":false	,				          // 是否是只减仓单
+    "wt": "CONTRACT_PRICE",	    // 触发价类型
+    "ot": "TRAILING_STOP_MARKET",	// 原始订单类型
+    "ps":"LONG"						      // 持仓方向
+    "cp":false,						      // 是否为触发平仓单; 仅在条件订单情况下会推送此字段
+    "AP":"7476.89",					    // 追踪止损激活价格, 仅在追踪止损单时会推送此字段
+    "cr":"5.0",						      // 追踪止损回调比例, 仅在追踪止损单时会推送此字段
+    "pP": false,                // 是否开启条件单触发保护
+    "si": 0,                    // 忽略
+    "ss": 0,                    // 忽略
+    "rp":"0",					          // 该交易实现盈亏
+    "V":"EXPIRE_TAKER",         // 自成交防止模式
+    "pm":"OPPONENT",            // 价格匹配模式
+    "gtd":0                     // TIF为GTD的订单自动取消时间
+  }
+}
+
+U本位合约Websocket账户信息推送精简交易推送
+精简交易推送
+精简交易推送相比原有的ORDER_TRADE_UPDATE流减少了数据延迟，但该交易推送仅推送和交易相关的字段。
+
+事件类型
+TRADE_LITE
+
+响应示例
+{
+  "e":"TRADE_LITE",             // 事件类型
+  "E":1721895408092,            // 事件时间
+  "T":1721895408214,            // 交易时间
+  "s":"BTCUSDT",                // 交易对
+  "q":"0.001",                  // 订单原始数量
+  "p":"0",                      // 订单原始价格
+  "m":false,                    // 该成交是作为挂单成交吗？
+  "c":"z8hcUoOsqEdKMeKPSABslD", // 客户端自定订单ID
+      // 特殊的自定义订单ID:
+      // "autoclose-"开头的字符串: 系统强平订单
+      // "adl_autoclose": ADL自动减仓订单
+      // "settlement_autoclose-": 下架或交割的结算订单
+  "S":"BUY",                    // 订单方向
+  "L":"64089.20",               // 订单末次成交价格
+  "l":"0.040",                  // 订单末次成交量
+  "t":109100866,                // 成交ID
+  "i":8886774,                  // 订单ID
+}
+
+U本位合约Websocket账户信息推送策略交易更新推送
+策略交易更新推送
+事件描述
+STRATEGY_UPDATE 在策略交易创建、取消、失效等等时候更新。
+
+策略状态
+
+NEW
+WORKING
+CANCELLED
+EXPIRED
+opCode
+
+8001: 策略参数更改
+8002: 用户取消策略
+8003: 用户手动新增或取消订单
+8004: 达到 stop limit
+8005: 用户仓位爆仓
+8006: 已达最大可挂单数量
+8007: 新增网格策略
+8008: 保证金不足
+8009: 价格超出范围
+8010: 市场非交易状态
+8011: 关仓失败，平仓单无法成交
+8012: 超过最大可交易名目金额
+8013: 不符合网格交易身份
+8014: 不符合 Futures Trading Quantitative Rules，策略终止
+8015: 无仓位或是仓位已经爆仓
+事件类型
+STRATEGY_UPDATE
+
+响应示例
+{
+	"e": "STRATEGY_UPDATE", // 事件类型
+	"T": 1669261797627, // 撮合时间
+	"E": 1669261797628, // 事件时间
+	"su": {
+			"si": 176054594, // 策略 ID
+			"st": "GRID", // 策略类型
+			"ss": "NEW", // 策略状态
+			"s": "BTCUSDT", // 交易对
+			"ut": 1669261797627, // 更新时间
+			"c": 8007 // opCode
+		}
+}
+
+U本位合约Websocket账户信息推送网格更新推送
+网格更新推送
+事件描述
+GRID_UPDATE 在网格子订单有部份或是完全成交时更新。
+
+策略状态
+
+NEW
+WORKING
+CANCELLED
+EXPIRED
+事件类型
+GRID_UPDATE
+
+响应示例
+{
+	"e": "GRID_UPDATE", // 事件类型
+	"T": 1669262908216, // 撮合时间
+	"E": 1669262908218, // 事件时间
+	"gu": {
+			"si": 176057039, // 策略 ID
+			"st": "GRID", // 策略类型
+			"ss": "WORKING", // 策略状态
+			"s": "BTCUSDT", // 交易对
+			"r": "-0.00300716", // 已实现 PNL
+			"up": "16720", // 未配对均价
+			"uq": "-0.001", // 未配对数量
+			"uf": "-0.00300716", // 未配对手续费
+			"mp": "0.0", // 已配对 PNL
+			"ut": 1669262908197 // 更新时间
+		}
+}
+
+U本位合约账户接口WebSocket API账户余额(USER-DATA)
+账户余额V2 (USER_DATA)
+查询账户余额
+
+方式
+v2/account.balance
+
+请求
+{
+    "id": "605a6d20-6588-4cb9-afa0-b0ab087507ba",
+    "method": "v2/account.balance",
+    "params": {
+        "apiKey": "xTaDyrmvA9XT2oBHHjy39zyPzKCvMdtH3b9q4xadkAg2dNSJXQGCxzui26L823W2",
+        "timestamp": 1702561978458,
+        "signature": "208bb94a26f99aa122b1319490ca9cb2798fccc81d9b6449521a26268d53217a"
+    }
+}
+
+请求权重
+5
+
+请求参数
+名称	类型	是否必需	描述
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+响应示例
+{
+    "id": "605a6d20-6588-4cb9-afa0-b0ab087507ba",
+    "status": 200,
+    "result": {
+        [
+           {
+             "accountAlias": "SgsR",              // 账户唯一识别码
+             "asset": "USDT",  	                // 资产
+             "balance": "122607.35137903",        // 总余额
+             "crossWalletBalance": "23.72469206", // 全仓余额
+             "crossUnPnl": "0.00000000"           // 全仓持仓未实现盈亏
+             "availableBalance": "23.72469206",   // 下单可用余额
+             "maxWithdrawAmount": "23.72469206",  // 最大可转出余额
+             "marginAvailable": true,            // 是否可用作联合保证金
+            "updateTime": 1617939110373
+            }
+        ]
+    },
+    "rateLimits": [
+      {
+        "rateLimitType": "REQUEST_WEIGHT",
+        "interval": "MINUTE",
+        "intervalNum": 1,
+        "limit": 2400,
+        "count": 20
+      }
+    ]
+}
+
+U本位合约账户接口WebSocket API账户余额(USER-DATA)
+账户余额 (USER_DATA)
+查询账户余额
+
+方式
+account.balance
+
+请求
+{
+    "id": "605a6d20-6588-4cb9-afa0-b0ab087507ba",
+    "method": "account.balance",
+    "params": {
+        "apiKey": "xTaDyrmvA9XT2oBHHjy39zyPzKCvMdtH3b9q4xadkAg2dNSJXQGCxzui26L823W2",
+        "timestamp": 1702561978458,
+        "signature": "208bb94a26f99aa122b1319490ca9cb2798fccc81d9b6449521a26268d53217a"
+    }
+}
+
+请求权重
+5
+
+请求参数
+名称	类型	是否必需	描述
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+响应示例
+{
+    "id": "605a6d20-6588-4cb9-afa0-b0ab087507ba",
+    "status": 200,
+    "result": {
+        [
+         	{
+         		"accountAlias": "SgsR",    // 账户唯一识别码
+         		"asset": "USDT",		// 资产
+         		"balance": "122607.35137903",	// 总余额
+         		"crossWalletBalance": "23.72469206", // 全仓余额
+          		"crossUnPnl": "0.00000000"  // 全仓持仓未实现盈亏
+          		"availableBalance": "23.72469206",       // 下单可用余额
+          		"maxWithdrawAmount": "23.72469206",     // 最大可转出余额
+          		"marginAvailable": true,    // 是否可用作联合保证金
+          		"updateTime": 1617939110373
+        	}
+        ]
+    },
+    "rateLimits": [
+      {
+        "rateLimitType": "REQUEST_WEIGHT",
+        "interval": "MINUTE",
+        "intervalNum": 1,
+        "limit": 2400,
+        "count": 20
+      }
+    ]
+}
+
+U本位合约账户接口WebSocket API账户信息V2(USER-DATA)
+账户信息V2 (USER_DATA)
+接口描述
+现有账户信息。 用户在单资产模式和多资产模式下会看到不同结果，响应部分的注释解释了两种模式下的不同。
+
+方式
+v2/account.status
+
+请求
+{
+    "id": "605a6d20-6588-4cb9-afa0-b0ab087507ba",
+    "method": "v2/account.status",
+    "params": {
+        "apiKey": "xTaDyrmvA9XT2oBHHjy39zyPzKCvMdtH3b9q4xadkAg2dNSJXQGCxzui26L823W2",
+        "timestamp": 1702620814781,
+        "signature": "6bb98ef84170c70ba3d01f44261bfdf50fef374e551e590de22b5c3b729b1d8c"
+    }
+}
+
+请求权重
+5
+
+请求参数
+名称	类型	是否必需	描述
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+响应示例
+单资产模式
+
+{
+  "id": "605a6d20-6588-4cb9-afa0-b0ab087507ba",
+  "status": 200,
+  "result": {   
+	"totalInitialMargin": "0.00000000",            // 当前所需起始保证金总额(存在逐仓请忽略), 仅计算usdt资产positions), only for USDT asset
+	"totalMaintMargin": "0.00000000",  	           // 维持保证金总额, 仅计算usdt资产
+	"totalWalletBalance": "103.12345678",          // 账户总余额, 仅计算usdt资产
+	"totalUnrealizedProfit": "0.00000000",         // 持仓未实现盈亏总额, 仅计算usdt资产
+	"totalMarginBalance": "103.12345678",          // 保证金总余额, 仅计算usdt资产
+	"totalPositionInitialMargin": "0.00000000",    // 持仓所需起始保证金(基于最新标记价格), 仅计算usdt资产
+	"totalOpenOrderInitialMargin": "0.00000000",   // 当前挂单所需起始保证金(基于最新标记价格), 仅计算usdt资产
+	"totalCrossWalletBalance": "103.12345678",     // 全仓账户余额, 仅计算usdt资产
+	"totalCrossUnPnl": "0.00000000",	           // 全仓持仓未实现盈亏总额, 仅计算usdt资产
+	"availableBalance": "103.12345678",            // 可用余额, 仅计算usdt资产
+	"maxWithdrawAmount": "103.12345678"            // 最大可转出余额, 仅计算usdt资产
+	"assets": [ 
+		{
+			"asset": "USDT",			            // 资产
+			"walletBalance": "23.72469206",         // 余额
+			"unrealizedProfit": "0.00000000",       // 未实现盈亏
+			"marginBalance": "23.72469206",         // 保证金余额
+			"maintMargin": "0.00000000",	        // 维持保证金
+			"initialMargin": "0.00000000",          // 当前所需起始保证金
+			"positionInitialMargin": "0.00000000",  // 持仓所需起始保证金(基于最新标记价格)
+			"openOrderInitialMargin": "0.00000000", // 当前挂单所需起始保证金(基于最新标记价格)
+			"crossWalletBalance": "23.72469206",    // 全仓账户余额
+			"crossUnPnl": "0.00000000"              // 全仓持仓未实现盈亏
+			"availableBalance": "23.72469206",      // 可用余额
+			"maxWithdrawAmount": "23.72469206",     // 最大可转出余额
+			"updateTime": 1625474304765             // 更新时间
+		},   
+		{
+			"asset": "USDC",			          
+			"walletBalance": "103.12345678",      
+			"unrealizedProfit": "0.00000000",     
+			"marginBalance": "103.12345678",      
+			"maintMargin": "0.00000000",	     
+			"initialMargin": "0.00000000",   
+			"positionInitialMargin": "0.00000000",   
+			"openOrderInitialMargin": "0.00000000",  
+			"crossWalletBalance": "103.12345678",    
+			"crossUnPnl": "0.00000000"      
+			"availableBalance": "126.72469206", 
+			"maxWithdrawAmount": "103.12345678", 
+			"updateTime": 1625474304765 
+		}
+    ],
+	"positions": [  // 仅有仓位或挂单的交易对会被返回
+		            // 根据用户持仓模式展示持仓方向，即单向模式下只返回BOTH持仓情况，双向模式下只返回 LONG 和 SHORT 持仓情况
+   	  {
+           "symbol": "BTCUSDT",               // 交易对
+           "positionSide": "BOTH",            // 持仓方向
+           "positionAmt": "1.000",            // 持仓数量
+           "unrealizedProfit": "0.00000000",  // 持仓未实现盈亏   
+           "isolatedMargin": "0.00000000",	
+           "notional": "0",
+           "isolatedWallet": "0",
+           "initialMargin": "0",              // 持仓所需起始保证金(基于最新标记价格)
+           "maintMargin": "0",                // 当前杠杆下用户可用的最大名义价值
+           "updateTime": 0                    // 更新时间 
+  	  } 
+	]
+  },
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 20
+    }
+  ]
+}
+
+多资产模式
+
+{
+  "id": "605a6d20-6588-4cb9-afa0-b0ab087507ba",
+  "status": 200,
+  "result": {   
+	"totalInitialMargin": "0.00000000",          // 以USD计价的所需起始保证金总额
+	"totalMaintMargin": "0.00000000",  	         // 以USD计价的维持保证金总额
+	"totalWalletBalance": "126.72469206",        // 以USD计价的账户总余额
+	"totalUnrealizedProfit": "0.00000000",       // 以USD计价的持仓未实现盈亏总额
+	"totalMarginBalance": "126.72469206",        // 以USD计价的保证金总余额 
+	"totalPositionInitialMargin": "0.00000000",  // 以USD计价的持仓所需起始保证金(基于最新标记价格)
+	"totalOpenOrderInitialMargin": "0.00000000", // 以USD计价的当前挂单所需起始保证金(基于最新标记价格)
+	"totalCrossWalletBalance": "126.72469206",   // 以USD计价的全仓账户余额
+	"totalCrossUnPnl": "0.00000000",	         // 以USD计价的全仓持仓未实现盈亏总额
+	"availableBalance": "126.72469206",          // 以USD计价的可用余额
+	"maxWithdrawAmount": "126.72469206"          // 以USD计价的最大可转出余额
+	"assets": [
+		{
+			"asset": "USDT",			            // 资产
+			"walletBalance": "23.72469206",         // 余额
+			"unrealizedProfit": "0.00000000",       // 未实现盈亏
+			"marginBalance": "23.72469206",         // 保证金余额
+			"maintMargin": "0.00000000",	        // 维持保证金
+			"initialMargin": "0.00000000",          // 当前所需起始保证金
+			"positionInitialMargin": "0.00000000",  // 持仓所需起始保证金(基于最新标记价格)
+			"openOrderInitialMargin": "0.00000000", // 当前挂单所需起始保证金(基于最新标记价格)
+			"crossWalletBalance": "23.72469206",    // 全仓账户余额
+			"crossUnPnl": "0.00000000"              // 全仓持仓未实现盈亏
+			"availableBalance": "23.72469206",      // 可用余额
+			"maxWithdrawAmount": "23.72469206",     // 最大可转出余额
+			"updateTime": 1625474304765             // 更新时间
+		},   
+		{
+			"asset": "USDC",			          
+			"walletBalance": "103.12345678",      
+			"unrealizedProfit": "0.00000000",     
+			"marginBalance": "103.12345678",      
+			"maintMargin": "0.00000000",	     
+			"initialMargin": "0.00000000",   
+			"positionInitialMargin": "0.00000000",   
+			"openOrderInitialMargin": "0.00000000",  
+			"crossWalletBalance": "103.12345678",    
+			"crossUnPnl": "0.00000000"      
+			"availableBalance": "126.72469206", 
+			"maxWithdrawAmount": "103.12345678", 
+			"updateTime": 1625474304765 
+		}
+	],
+	"positions": [  // 仅有仓位或挂单的交易对会被返回
+		            // 根据用户持仓模式展示持仓方向，即单向模式下只返回BOTH持仓情况，双向模式下只返回 LONG 和 SHORT 持仓情况
+   	  {
+           "symbol": "BTCUSDT",               // 交易对
+           "positionSide": "BOTH",            // 持仓方向
+           "positionAmt": "1.000",            // 持仓数量
+           "unrealizedProfit": "0.00000000",  // 持仓未实现盈亏   
+           "isolatedMargin": "0.00000000",	
+           "notional": "0",
+           "isolatedWallet": "0",
+           "initialMargin": "0",              // 持仓所需起始保证金(基于最新标记价格)
+           "maintMargin": "0",                // 当前杠杆下用户可用的最大名义价值
+           "updateTime": 0                    // 更新时间 
+  	  } 
+	]
+  },
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 20
+    }
+  ]
+}
+
+U本位合约账户接口WebSocket API账户信息(USER-DATA)
+账户信息 (USER_DATA)
+接口描述
+现有账户信息。 用户在单资产模式和多资产模式下会看到不同结果，响应部分的注释解释了两种模式下的不同。
+
+方式
+account.status
+
+请求
+{
+    "id": "605a6d20-6588-4cb9-afa0-b0ab087507ba",
+    "method": "account.status",
+    "params": {
+        "apiKey": "xTaDyrmvA9XT2oBHHjy39zyPzKCvMdtH3b9q4xadkAg2dNSJXQGCxzui26L823W2",
+        "timestamp": 1702620814781,
+        "signature": "6bb98ef84170c70ba3d01f44261bfdf50fef374e551e590de22b5c3b729b1d8c"
+    }
+}
+
+请求权重
+5
+
+请求参数
+名称	类型	是否必需	描述
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+响应示例
+单资产模式
+
+{
+  "id": "605a6d20-6588-4cb9-afa0-b0ab087507ba",
+  "status": 200,
+  "result": {
+	"feeTier": 0,  // 手续费等级
+	"canTrade": true,  // 是否可以交易
+	"canDeposit": true,  // 是否可以入金
+	"canWithdraw": true, // 是否可以出金
+	"updateTime": 0,     // 保留字段，请忽略
+	"multiAssetsMargin": false,
+	"tradeGroupId": -1,
+	"totalInitialMargin": "0.00000000",  // 当前所需起始保证金总额(存在逐仓请忽略), 仅计算usdt资产
+	"totalMaintMargin": "0.00000000",  // 维持保证金总额, 仅计算usdt资产
+	"totalWalletBalance": "23.72469206",   // 账户总余额, 仅计算usdt资产
+	"totalUnrealizedProfit": "0.00000000",  // 持仓未实现盈亏总额, 仅计算usdt资产
+	"totalMarginBalance": "23.72469206",  // 保证金总余额, 仅计算usdt资产
+	"totalPositionInitialMargin": "0.00000000",  // 持仓所需起始保证金(基于最新标记价格), 仅计算usdt资产
+	"totalOpenOrderInitialMargin": "0.00000000",  // 当前挂单所需起始保证金(基于最新标记价格), 仅计算usdt资产
+	"totalCrossWalletBalance": "23.72469206",  // 全仓账户余额, 仅计算usdt资产
+	"totalCrossUnPnl": "0.00000000",	// 全仓持仓未实现盈亏总额, 仅计算usdt资产
+	"availableBalance": "23.72469206",       // 可用余额, 仅计算usdt资产
+	"maxWithdrawAmount": "23.72469206"     // 最大可转出余额, 仅计算usdt资产
+	"assets": [
+		{
+			"asset": "USDT",	 	//资产
+			"walletBalance": "23.72469206",  //余额
+			"unrealizedProfit": "0.00000000",  // 未实现盈亏
+			"marginBalance": "23.72469206",  // 保证金余额
+			"maintMargin": "0.00000000",	// 维持保证金
+			"initialMargin": "0.00000000",  // 当前所需起始保证金
+			"positionInitialMargin": "0.00000000",  // 持仓所需起始保证金(基于最新标记价格)
+			"openOrderInitialMargin": "0.00000000", // 当前挂单所需起始保证金(基于最新标记价格)
+			"crossWalletBalance": "23.72469206",  //全仓账户余额
+			"crossUnPnl": "0.00000000" // 全仓持仓未实现盈亏
+			"availableBalance": "126.72469206",       // 可用余额
+			"maxWithdrawAmount": "23.72469206",     // 最大可转出余额
+			"marginAvailable": true,   // 是否可用作联合保证金
+			"updateTime": 1625474304765  //更新时间
+		},
+		{
+			"asset": "BUSD",	 	//资产
+			"walletBalance": "103.12345678",  //余额
+			"unrealizedProfit": "0.00000000",  // 未实现盈亏
+			"marginBalance": "103.12345678",  // 保证金余额
+			"maintMargin": "0.00000000",	// 维持保证金
+			"initialMargin": "0.00000000",  // 当前所需起始保证金
+			"positionInitialMargin": "0.00000000",  // 持仓所需起始保证金(基于最新标记价格)
+			"openOrderInitialMargin": "0.00000000", // 当前挂单所需起始保证金(基于最新标记价格)
+			"crossWalletBalance": "103.12345678",  //全仓账户余额
+			"crossUnPnl": "0.00000000" // 全仓持仓未实现盈亏
+			"availableBalance": "126.72469206",       // 可用余额
+			"maxWithdrawAmount": "103.12345678",     // 最大可转出余额
+			"marginAvailable": true,   // 否可用作联合保证金
+			"updateTime": 0  // 更新时间
+			}
+	],
+	"positions": [  // 头寸，将返回所有市场symbol。
+		//根据用户持仓模式展示持仓方向，即单向模式下只返回BOTH持仓情况，双向模式下只返回 LONG 和 SHORT 持仓情况
+		{
+			"symbol": "BTCUSDT",  // 交易对
+			"initialMargin": "0",	// 当前所需起始保证金(基于最新标记价格)
+			"maintMargin": "0",	//维持保证金
+			"unrealizedProfit": "0.00000000",  // 持仓未实现盈亏
+			"positionInitialMargin": "0",  // 持仓所需起始保证金(基于最新标记价格)
+			"openOrderInitialMargin": "0",  // 当前挂单所需起始保证金(基于最新标记价格)
+			"leverage": "100",	// 杠杆倍率
+			"isolated": true,  // 是否是逐仓模式
+			"entryPrice": "0.00000",  // 持仓成本价
+			"maxNotional": "250000",  // 当前杠杆下用户可用的最大名义价值
+			"bidNotional": "0",  // 买单净值，忽略
+			"askNotional": "0",  // 卖单净值，忽略
+			"positionSide": "BOTH",  // 持仓方向
+			"positionAmt": "0",		 // 持仓数量
+			"updateTime": 0         // 更新时间 
+		}
+	]
+  },
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 20
+    }
+  ]
+}
+
+多资产模式
+
+{
+  "id": "605a6d20-6588-4cb9-afa0-b0ab087507ba",
+  "status": 200,
+  "result": {
+	"feeTier": 0,  // 手续费等级
+	"canTrade": true,  // 是否可以交易
+	"canDeposit": true,  // 是否可以入金
+	"canWithdraw": true, // 是否可以出金
+	"updateTime": 0,     // 保留字段，请忽略
+	"multiAssetsMargin": true,
+	"tradeGroupId": -1,
+	"totalInitialMargin": "0.00000000",  // 以USD计价的所需起始保证金总额
+	"totalMaintMargin": "0.00000000",  // 以USD计价的维持保证金总额
+	"totalWalletBalance": "126.72469206",   // 以USD计价的账户总余额
+	"totalUnrealizedProfit": "0.00000000",  // 以USD计价的持仓未实现盈亏总额
+	"totalMarginBalance": "126.72469206",  // 以USD计价的保证金总余额
+	"totalPositionInitialMargin": "0.00000000",  // 以USD计价的持仓所需起始保证金(基于最新标记价格)
+	"totalOpenOrderInitialMargin": "0.00000000",  // 以USD计价的当前挂单所需起始保证金(基于最新标记价格)
+	"totalCrossWalletBalance": "126.72469206",  // 以USD计价的全仓账户余额
+	"totalCrossUnPnl": "0.00000000",	// 以USD计价的全仓持仓未实现盈亏总额
+	"availableBalance": "126.72469206",       // 以USD计价的可用余额
+	"maxWithdrawAmount": "126.72469206"     // 以USD计价的最大可转出余额
+	"assets": [
+		{
+			"asset": "USDT",	 	//资产
+			"walletBalance": "23.72469206",  //余额
+			"unrealizedProfit": "0.00000000",  // 未实现盈亏
+			"marginBalance": "23.72469206",  // 保证金余额
+			"maintMargin": "0.00000000",	// 维持保证金
+			"initialMargin": "0.00000000",  // 当前所需起始保证金
+			"positionInitialMargin": "0.00000000",  // 持仓所需起始保证金(基于最新标记价格)
+			"openOrderInitialMargin": "0.00000000", // 当前挂单所需起始保证金(基于最新标记价格)
+			"crossWalletBalance": "23.72469206",  //全仓账户余额
+			"crossUnPnl": "0.00000000" // 全仓持仓未实现盈亏
+			"availableBalance": "23.72469206",       // 可用余额
+			"maxWithdrawAmount": "23.72469206",     // 最大可转出余额
+			"marginAvailable": true,   // 是否可用作联合保证金
+			"updateTime": 1625474304765  //更新时间
+		},
+		{
+			"asset": "BUSD",	 	//资产
+			"walletBalance": "103.12345678",  //余额
+			"unrealizedProfit": "0.00000000",  // 未实现盈亏
+			"marginBalance": "103.12345678",  // 保证金余额
+			"maintMargin": "0.00000000",	// 维持保证金
+			"initialMargin": "0.00000000",  // 当前所需起始保证金
+			"positionInitialMargin": "0.00000000",  // 持仓所需起始保证金(基于最新标记价格)
+			"openOrderInitialMargin": "0.00000000", // 当前挂单所需起始保证金(基于最新标记价格)
+			"crossWalletBalance": "103.12345678",  //全仓账户余额
+			"crossUnPnl": "0.00000000" // 全仓持仓未实现盈亏
+			"availableBalance": "103.12345678",       // 可用余额
+			"maxWithdrawAmount": "103.12345678",     // 最大可转出余额
+			"marginAvailable": true,   // 否可用作联合保证金
+			"updateTime": 0  // 更新时间
+			}
+	],
+	"positions": [  // 头寸，将返回所有市场symbol。
+		//根据用户持仓模式展示持仓方向，即单向模式下只返回BOTH持仓情况，双向模式下只返回 LONG 和 SHORT 持仓情况
+		{
+			"symbol": "BTCUSDT",  // 交易对
+			"initialMargin": "0",	// 当前所需起始保证金(基于最新标记价格)
+			"maintMargin": "0",	//维持保证金
+			"unrealizedProfit": "0.00000000",  // 持仓未实现盈亏
+			"positionInitialMargin": "0",  // 持仓所需起始保证金(基于最新标记价格)
+			"openOrderInitialMargin": "0",  // 当前挂单所需起始保证金(基于最新标记价格)
+			"leverage": "100",	// 杠杆倍率
+			"isolated": true,  // 是否是逐仓模式
+			"entryPrice": "0.00000",  // 持仓成本价
+			"breakEvenPrice": "0.0",  // 持仓成本价
+			"maxNotional": "250000",  // 当前杠杆下用户可用的最大名义价值
+			"bidNotional": "0",  // 买单净值，忽略
+			"askNotional": "0",  // 买单净值，忽略
+			"positionSide": "BOTH",  // 持仓方向
+			"positionAmt": "0",		 // 持仓数量
+			"updateTime": 0         // 更新时间 
+		}
+	]
+  },
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 20
+    }
+  ]
+}
+
+U本位合约WebSocket API基本信息
+WebSocket API基本信息
+Base url为：'wss://ws-fapi.binance.com/ws-fapi/v1'
+测试网的Base url为：wss://testnet.binancefuture.com/ws-fapi/v1
+单次连接API有效期仅为24小时;预计在 24 小时标记后断开连接。
+Websocket服务器每3分钟发送一个ping消息。
+如果 websocket 服务器在10分钟内没有收到来自连接的pong frame，则连接将断开。
+当客户收到ping消息，必需尽快回复pong消息，同时payload需要和ping消息一致。
+未经请求的pong消息是被允许的，但是不会保证连接不断开。对于这些pong消息，建议payload为空。
+必须通过获取除签名之外的所有请求参数并按字母顺序按名称排序来生成签名payload
+除非另有说明，否则列表按时间顺序返回。
+除非另有说明，否则所有时间戳均以 UTC 中的毫秒为单位。
+除非另有说明，否则所有字段名称和值均区分大小写。
+INT 参数（如时间戳）应为 JSON 整数，而不是字符串。
+DECIMAL参数（如 price）应为 JSON 字符串，而不是浮点数。
+用户数据流请求 - 您需要建立单独的WebSocket连接来获得 [账户信息推送]（https://binance-docs.github.io/apidocs/futures/cn/#websocket-2）
+请求示例:
+
+{
+  "id": "9ca10e58-7452-467e-9454-f669bb9c764e",
+  "method": "order.place",
+  "params": {
+    "apiKey": "yeqKcXjtA9Eu4Tr3nJk61UJAGzXsEmFqqfVterxpMpR4peNfqE7Zl7oans8Qj089",
+    "price": "42088.0",
+    "quantity": "0.1",
+    "recvWindow": 5000,
+    "side": "BUY",
+    "signature": "996962a19802b5a09d7bc6ab1524227894533322a2f8a1f8934991689cabf8fe",
+    "symbol": "BTCUSDT",
+    "timeInForce": "GTC",
+    "timestamp": 1705311512994,
+    "type": "LIMIT"
+  }
+}
+
+请求字段:
+
+名称	类型	是否必需	描述
+id	INT / STRING / null	YES	任意的 ID 用于匹配对请求的响应
+method	STRING	YES	请求函数名称
+params	OBJECT	NO	请求参数。如果没有参数可以省略
+请求 id 是任意的。可以使用 UUID、顺次 ID、当前时间戳等。 服务器不会以任何方式解释 id，只是在响应中回显它。
+
+可以在一个会话中自由重复使用 ID，不过请注意不要一次发送多个具有相同 ID 的请求，因为否则可能无法区分响应。
+
+请求函数名称可以以显式版本为前缀，例如："v3/order.place"
+
+params 的顺序不重要。
+
+WebSocket API响应格式
+响应在 text 帧 中以 JSON 格式返回，每帧一个响应。
+
+成功响应示例:
+
+{
+  "id": "43a3843a-2321-4e45-8f79-351e5c354563",
+  "status": 200,
+  "result": {
+    "orderId": 336829446,
+    "symbol": "BTCUSDT",
+    "status": "NEW",
+    "clientOrderId": "FqEw6cn0vDhrkmfiwLYPeo",
+    "price": "42088.00",
+    "avgPrice": "0.00",
+    "origQty": "0.100",
+    "executedQty": "0.000",
+    "cumQty": "0.000",
+    "cumQuote": "0.00000",
+    "timeInForce": "GTC",
+    "type": "LIMIT",
+    "reduceOnly": false,
+    "closePosition": false,
+    "side": "BUY",
+    "positionSide": "BOTH",
+    "stopPrice": "0.00",
+    "workingType": "CONTRACT_PRICE",
+    "priceProtect": false,
+    "origType": "LIMIT",
+    "priceMatch": "NONE",
+    "selfTradePreventionMode": "NONE",
+    "goodTillDate": 0,
+    "updateTime": 1705385954229
+  },
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 1
+    },
+    {
+      "rateLimitType": "ORDERS",
+      "interval": "SECOND",
+      "intervalNum": 10,
+      "limit": 300,
+      "count": 1
+    },
+    {
+      "rateLimitType": "ORDERS",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 1200,
+      "count": 0
+    }
+  ]
+}
+
+失败响应示例:
+
+{
+  "id": "5761b939-27b1-4948-ab87-4a372a3f6b72",
+  "status": 400,
+  "error": {
+    "code": -1102,
+    "msg": "Mandatory parameter 'quantity' was not sent, was empty/null, or malformed."
+  },
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 1
+    },
+    {
+      "rateLimitType": "ORDERS",
+      "interval": "SECOND",
+      "intervalNum": 10,
+      "limit": 300,
+      "count": 1
+    },
+    {
+      "rateLimitType": "ORDERS",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 1200,
+      "count": 1
+    }
+  ]
+}
+
+响应字段:
+
+名称	类型	是否必需	描述
+id	INT / STRING / null	YES	与原来请求的ID一样
+status	INT	YES	响应状态。请看 状态代码
+result	OBJECT / ARRAY	YES	响应内容。请求成功则显示
+error	OBJECT	错误描述。请求失败则显示
+rateLimits	ARRAY	NO	速率限制状态。请看 速率限制
+WebSocket API访问限制
+速率限制与 REST API 相同，并且与 REST API 共享。
+WebSocket 握手尝试消耗权重5。
+ping/pong 帧的速率限制：每秒最多5次。
+默认情况下，响应中包含速率限制信息，参见 rateLimits 字段。
+可以通过在连接字符串或单个请求中的 returnRateLimits 布尔参数来控制 rateLimits 字段的可见性。
+例如，使用 wss://ws-fapi.binance.com/ws-fapi/v1?returnRateLimits=false 默认在响应中隐藏 rateLimits。在这样的情况下，您可以在请求中传递额外的 "returnRateLimits": true 参数，当默认隐藏时，就可以在响应中显示速率限制。
+WebSocket API连接后进行身份验证
+你可以使用会话身份验证请求对已经建立的连接进行身份验证：
+
+session.logon – 进行身份验证，或更改与连接相关联的API密钥。
+session.status – 检查连接状态和当前API密钥。
+session.logout – 忘记与连接关联的API密钥。
+WebSocket API关于吊销API密钥
+如果在活动会话期间，由于 任何 原因（例如IP地址未被加入白名单、API密钥被删除、API密钥没有正确的权限等），在下一个请求后，会话将被吊销，并显示以下错误消息:
+
+{
+  "id": null,
+  "status": 401,
+  "error": {
+    "code": -2015,
+    "msg": "Invalid API-key, IP, or permissions for action." 
+  }
+}
+
+WebSocket API授权 临时 请求
+WebSocket连接只能通过一个API密钥进行身份验证。 默认情况下，经过身份验证的API密钥将用于需要apiKey参数的请求。 但是，你始终可以为单个请求明确指定apiKey和signature，覆盖已认证的API密钥，以使用不同的API密钥授权特定请求。
+
+例如，你可能希望用默认密钥来验证 USER_DATA，但在下单时使用TRADE密钥来签名。
+
+WebSocket API身份验证请求
+注意： 仅支持 Ed25519 密钥用于此功能。
+
+用API key登录 (SIGNED)
+请求
+
+{
+  "id": "c174a2b1-3f51-4580-b200-8528bd237cb7",
+  "method": "session.logon",
+  "params": {
+    "apiKey": "vmPUZE6mv9SD5VNHk4HlWFsOr6aKE2zvsw0MuIgwCIPy6utIco14y7Ju91duEh8A",
+    "signature": "1cf54395b336b0a9727ef27d5d98987962bc47aca6e13fe978612d0adee066ed",
+    "timestamp": 1649729878532
+  }
+}
+
+响应:
+
+{
+  "id": "c174a2b1-3f51-4580-b200-8528bd237cb7",
+  "status": 200,
+  "result": {
+    "apiKey": "vmPUZE6mv9SD5VNHk4HlWFsOr6aKE2zvsw0MuIgwCIPy6utIco14y7Ju91duEh8A",
+    "authorizedSince": 1649729878532,
+    "connectedSince": 1649729873021,
+    "returnRateLimits": false,
+    "serverTime": 1649729878630
+  }
+}
+
+使用提供的API密钥进行WebSocket连接身份验证。
+
+在调用session.logon后，将来的需要apiKey和signature参数的请求可以省略它们。
+
+请注意，只能认证一个API密钥。 多次调用session.logon将更改当前已认证的API密钥。
+
+权重: 2
+
+参数:
+
+参数名	类型	是否必需	描述
+apiKey	STRING	YES	
+recvWindow	INT	NO	The value cannot be greater than 60000
+signature	STRING	YES	
+timestamp	INT	YES	
+数据源: 缓存
+
+查询会话状态
+请求
+
+{
+  "id": "b50c16cd-62c9-4e29-89e4-37f10111f5bf",
+  "method": "session.status"
+}
+
+响应:
+
+{
+  "id": "b50c16cd-62c9-4e29-89e4-37f10111f5bf",
+  "status": 200,
+  "result": {
+    // 如果连接未经身份验证，"apiKey" 和 "authorizedSince" 将显示为 null。
+    "apiKey": "vmPUZE6mv9SD5VNHk4HlWFsOr6aKE2zvsw0MuIgwCIPy6utIco14y7Ju91duEh8A",
+    "authorizedSince": 1649729878532,
+    "connectedSince": 1649729873021,
+    "returnRateLimits": false,
+    "serverTime": 1649730611671
+  }
+}
+
+查询WebSocket连接的状态，检查用于授权请求的API密钥（如果有的话）。
+
+权重: 2
+
+参数: NONE
+
+数据源: 缓存
+
+退出会话
+请求
+
+{
+  "id": "c174a2b1-3f51-4580-b200-8528bd237cb7",
+  "method": "session.logout"
+}
+
+响应:
+
+{
+  "id": "c174a2b1-3f51-4580-b200-8528bd237cb7",
+  "status": 200,
+  "result": {
+    "apiKey": null,
+    "authorizedSince": null,
+    "connectedSince": 1649729873021,
+    "returnRateLimits": false,
+    "serverTime": 1649730611671
+  }
+}
+
+忘记之前认证的API密钥。 如果连接未经身份验证，此请求不会有任何作用。
+
+请注意，session.logout请求后，WebSocket连接仍然保持打开状态。 你可以继续使用连接，但现在必须在需要的地方明确提供apiKey和signature参数。
+
+权重: 2
+
+参数: NONE
+
+数据源: 缓存
+
+SIGNED (TRADE and USER_DATA) 请求安全
+SIGNED 请求示例 (Ed25519)
+*我们建议使用 Ed25519 API keys**，因为它在所有受支持的 API key 类型中提供最佳性能和安全性。
+参数	取值
+symbol	BTCUSDT
+side	SELL
+type	LIMIT
+timeInForce	GTC
+quantity	1
+price	0.2
+timestamp	1668481559918
+#!/usr/bin/env python3
+import base64
+import time
+import json
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from websocket import create_connection
+# 设置身份验证：
+API_KEY='替换成您的 API Key'
+PRIVATE_KEY_PATH='test-prv-key.pem'
+# 加载 private key。
+# 在这个例子中，private key 没有加密，但我们建议使用强密码以提高安全性。
+with open(PRIVATE_KEY_PATH, 'rb') as f:
+    private_key = load_pem_private_key(data=f.read(), password=None)
+# 设置请求参数：
+params = {
+    'apiKey':        API_KEY,	
+    'symbol':       'BTCUSDT',
+    'side':         'SELL',
+    'type':         'LIMIT',
+    'timeInForce':  'GTC',
+    'quantity':     '1.0000000',
+    'price':        '0.20'
+}
+# 参数中加时间戳：
+timestamp = int(time.time() * 1000) # 以毫秒为单位的 UNIX 时间戳
+params['timestamp'] = timestamp
+# 参数中加签名：
+payload = '&'.join([f'{param}={value}' for param, value in sorted(params.items())])
+signature = base64.b64encode(private_key.sign(payload.encode('ASCII')))
+params['signature'] = signature.decode('ASCII')
+# 发送请求：
+request = {	
+    'id': 'my_new_order',	
+    'method': 'order.place',	
+    'params': params
+}
+ws = create_connection('wss://ws-fapi.binance.com/ws-fapi/v1')	
+ws.send(json.dumps(request))	
+result =  ws.recv()	
+ws.close()	
+print(result)
+
+U本位合约通用枚举定义
+公开API参数
+术语解释
+base asset 指一个交易对的交易对象，即写在靠前部分的资产名
+quote asset 指一个交易对的定价资产，即写在靠后部分资产名
+枚举定义
+交易对类型:
+
+FUTURE 期货
+合约类型 (contractType):
+
+PERPETUAL 永续合约
+CURRENT_MONTH 当月交割合约
+NEXT_MONTH 次月交割合约
+CURRENT_QUARTER 当季交割合约
+NEXT_QUARTER 次季交割合约
+PERPETUAL_DELIVERING 交割结算中合约
+合约状态 (contractStatus, status):
+
+PENDING_TRADING 待上市
+TRADING 交易中
+PRE_DELIVERING 预交割
+DELIVERING 交割中
+DELIVERED 已交割
+PRE_SETTLE 预结算
+SETTLING 结算中
+CLOSE 已下架
+订单状态 (status):
+
+NEW 新建订单
+PARTIALLY_FILLED 部分成交
+FILLED 全部成交
+CANCELED 已撤销
+REJECTED 订单被拒绝
+EXPIRED 订单过期(根据timeInForce参数规则)
+EXPIRED_IN_MATCH 订单被STP过期
+订单种类 (orderTypes, type):
+
+LIMIT 限价单
+MARKET 市价单
+STOP 止损限价单
+STOP_MARKET 止损市价单
+TAKE_PROFIT 止盈限价单
+TAKE_PROFIT_MARKET 止盈市价单
+TRAILING_STOP_MARKET 跟踪止损单
+订单方向 (side):
+
+BUY 买入
+SELL 卖出
+持仓方向:
+
+BOTH 单一持仓方向
+LONG 多头(双向持仓下)
+SHORT 空头(双向持仓下)
+有效方式 (timeInForce):
+
+GTC - Good Till Cancel 成交为止（下单后仅有1年有效期，1年后自动取消）
+IOC - Immediate or Cancel 无法立即成交(吃单)的部分就撤销
+FOK - Fill or Kill 无法全部立即成交就撤销
+GTX - Good Till Crossing 无法成为挂单方就撤销
+GTD - Good Till Date 在特定时间之前有效，到期自动撤销
+条件价格触发类型 (workingType)
+
+MARK_PRICE
+CONTRACT_PRICE
+响应类型 (newOrderRespType)
+
+ACK
+RESULT
+K线间隔:
+
+m -> 分钟; h -> 小时; d -> 天; w -> 周; M -> 月
+
+1m
+3m
+5m
+15m
+30m
+1h
+2h
+4h
+6h
+8h
+12h
+1d
+3d
+1w
+1M
+防止自成交模式:
+
+EXPIRE_TAKER
+EXPIRE_BOTH
+EXPIRE_MAKER
+盘口价下单模式:
+
+OPPONENT (盘口对手价)
+OPPONENT_5 (盘口对手5档价)
+OPPONENT_10 (盘口对手10档价)
+OPPONENT_20
+QUEUE (盘口同向价)
+QUEUE_5 (盘口同向排队5档价)
+QUEUE_10 (盘口同向排队10档价)
+QUEUE_20 (盘口同向排队20档价)
+限制种类 (rateLimitType)
+
+REQUEST_WEIGHT
+
+  {
+  	"rateLimitType": "REQUEST_WEIGHT",
+  	"interval": "MINUTE",
+  	"intervalNum": 1,
+  	"limit": 2400
+  }
+
+ORDERS
+
+  {
+  	"rateLimitType": "ORDERS",
+  	"interval": "MINUTE",
+  	"intervalNum": 1,
+  	"limit": 1200
+   }
+
+REQUESTS_WEIGHT 单位时间请求权重之和上限
+
+ORDERS 单位时间下单(撤单)次数上限
+
+限制间隔
+
+MINUTE
+过滤器
+过滤器，即Filter，定义了一系列交易规则。 共有两类，分别是针对交易对的过滤器symbol filters，和针对整个交易所的过滤器exchange filters(暂不支持)
+
+交易对过滤器
+PRICE_FILTER 价格过滤器
+/exchangeInfo 响应中的格式:
+
+  {
+    "filterType": "PRICE_FILTER",
+    "minPrice": "0.00000100",
+    "maxPrice": "100000.00000000",
+    "tickSize": "0.00000100"
+  }
+
+价格过滤器用于检测order订单中price参数的合法性
+
+minPrice 定义了 price/stopPrice 允许的最小值
+maxPrice 定义了 price/stopPrice 允许的最大值。
+tickSize 定义了 price/stopPrice 的步进间隔，即price必须等于minPrice+(tickSize的整数倍) 以上每一项均可为0，为0时代表这一项不再做限制。
+逻辑伪代码如下：
+
+price >= minPrice
+price <= maxPrice
+(price-minPrice) % tickSize == 0
+LOT_SIZE 订单尺寸
+/exchangeInfo 响应中的格式:*
+
+  {
+    "filterType": "LOT_SIZE",
+    "minQty": "0.00100000",
+    "maxQty": "100000.00000000",
+    "stepSize": "0.00100000"
+  }
+
+lots是拍卖术语，这个过滤器对订单中的quantity也就是数量参数进行合法性检查。包含三个部分：
+
+minQty 表示 quantity 允许的最小值.
+maxQty 表示 quantity 允许的最大值
+stepSize 表示 quantity允许的步进值。
+逻辑伪代码如下：
+
+quantity >= minQty
+quantity <= maxQty
+(quantity-minQty) % stepSize == 0
+MARKET_LOT_SIZE 市价订单尺寸
+参考LOT_SIZE，区别仅在于对市价单还是限价单生效
+
+MAX_NUM_ORDERS 最多订单数
+/exchangeInfo 响应中的格式:
+
+  {
+    "filterType": "MAX_NUM_ORDERS",
+    "limit": 200
+  }
+
+定义了某个交易对最多允许的挂单数量(不包括已关闭的订单)
+
+普通订单与条件订单均计算在内
+
+MAX_NUM_ALGO_ORDERS 最多条件订单数
+/exchangeInfo format:
+
+  {
+    "filterType": "MAX_NUM_ALGO_ORDERS",
+    "limit": 100
+  }
+
+定义了某个交易对最多允许的条件订单的挂单数量(不包括已关闭的订单)。
+
+条件订单目前包括STOP, STOP_MARKET, TAKE_PROFIT, TAKE_PROFIT_MARKET, 和 TRAILING_STOP_MARKET
+
+PERCENT_PRICE 价格振幅过滤器
+/exchangeInfo 响应中的格式:
+
+  {
+    "filterType": "PERCENT_PRICE",
+    "multiplierUp": "1.1500",
+    "multiplierDown": "0.8500",
+    "multiplierDecimal": 4
+  }
+
+PERCENT_PRICE 定义了基于标记价格计算的挂单价格的可接受区间.
+
+挂单价格必须同时满足以下条件：
+
+买单: price <= markPrice * multiplierUp
+卖单: price >= markPrice * multiplierDown
+MIN_NOTIONAL 最小名义价值
+/exchangeInfo 响应中的格式:
+
+  {
+    "filterType": "MIN_NOTIONAL",
+    "notional": "5.0"
+  }
+
+MIN_NOTIONAL过滤器定义了交易对订单所允许的最小名义价值(成交额)。 订单的名义价值是价格*数量。 由于MARKET订单没有价格，因此会使用 mark price 计算。
+
+U本位合约行情接口WebSocket API最新价格
+最新价格
+接口描述
+返回最近价格
+
+方式
+ticker.price
+
+请求
+{
+   	"id": "9d32157c-a556-4d27-9866-66760a174b57",
+    "method": "ticker.price",
+    "params": {
+        "symbol": "BTCUSDT"
+    }
+}
+
+请求权重
+单交易对1，无交易对2
+
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	NO	交易对
+不发送交易对参数，则会返回所有交易对信息
+响应示例
+{
+  "id": "9d32157c-a556-4d27-9866-66760a174b57",
+  "status": 200,
+  "result": {
+	"symbol": "BTCUSDT",
+	"price": "6000.01",
+	"time": 1589437530011   
+  },
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 2
+    }
+  ]
+}
+
+或(当不发送symbol)
+
+{
+  "id": "9d32157c-a556-4d27-9866-66760a174b57",
+  "status": 200,
+  "result": [
+    {
+	   "symbol": "BTCUSDT",
+	   "price": "6000.01",
+	   "time": 1589437530011  
+    }  
+  ],
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 2
+    }
+  ]
+}
+
+U本位合约行情接口WebSocket API深度信息
+深度信息
+接口描述
+获取有限档订单薄信息
+
+方式
+depth
+
+请求
+{
+    "id": "51e2affb-0aba-4821-ba75-f2625006eb43",
+    "method": "depth",
+    "params": {
+      "symbol": "BTCUSDT"
+    }
+}
+
+请求权重
+limit	权重
+5, 10, 20, 50	2
+100	5
+500	10
+1000	20
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+limit	INT	NO	默认 500; 可选值:[5, 10, 20, 50, 100, 500, 1000]
+响应示例
+{
+  "id": "51e2affb-0aba-4821-ba75-f2625006eb43",
+  "status": 200,
+  "result": {
+    "lastUpdateId": 1027024,
+    "E": 1589436922972,   // 消息时间
+    "T": 1589436922959,   // 撮合引擎时间
+    "bids": [				// 买单
+      [
+        "4.00000000",     // 价格
+        "431.00000000"    // 数量
+      ]
+    ],
+    "asks": [				// 卖单
+      [
+        "4.00000200",		// 价格
+        "12.00000000"		// 数量
+      ]
+    ]
+  },
+  "rateLimits": [
+    {
+      "rateLimitType": "REQUEST_WEIGHT",
+      "interval": "MINUTE",
+      "intervalNum": 1,
+      "limit": 2400,
+      "count": 5
+    }
+  ]
+}
+
+U本位合约交易接口REST API下单(TRADE)
+下单 (TRADE)
+接口描述
+下单
+
+HTTP请求
+POST /fapi/v1/order
+
+请求权重
+10s order rate limit(X-MBX-ORDER-COUNT-10S)为1; 1min order rate limit(X-MBX-ORDER-COUNT-1M)为1; IP rate limit(x-mbx-used-weight-1m)为0
+
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+side	ENUM	YES	买卖方向 SELL, BUY
+positionSide	ENUM	NO	持仓方向，单向持仓模式下非必填，默认且仅可填BOTH;在双向持仓模式下必填,且仅可选择 LONG 或 SHORT
+type	ENUM	YES	订单类型 LIMIT, MARKET, STOP, TAKE_PROFIT, STOP_MARKET, TAKE_PROFIT_MARKET, TRAILING_STOP_MARKET
+reduceOnly	STRING	NO	true, false; 非双开模式下默认false；双开模式下不接受此参数； 使用closePosition不支持此参数。
+quantity	DECIMAL	NO	下单数量,使用closePosition不支持此参数。
+price	DECIMAL	NO	委托价格
+newClientOrderId	STRING	NO	用户自定义的订单号，不可以重复出现在挂单中。如空缺系统会自动赋值。必须满足正则规则 ^[\.A-Z\:/a-z0-9_-]{1,36}$
+stopPrice	DECIMAL	NO	触发价, 仅 STOP, STOP_MARKET, TAKE_PROFIT, TAKE_PROFIT_MARKET 需要此参数
+closePosition	STRING	NO	true, false；触发后全部平仓，仅支持STOP_MARKET和TAKE_PROFIT_MARKET；不与quantity合用；自带只平仓效果，不与reduceOnly 合用
+activationPrice	DECIMAL	NO	追踪止损激活价格，仅TRAILING_STOP_MARKET 需要此参数, 默认为下单当前市场价格(支持不同workingType)
+callbackRate	DECIMAL	NO	追踪止损回调比例，可取值范围[0.1, 10],其中 1代表1% ,仅TRAILING_STOP_MARKET 需要此参数
+timeInForce	ENUM	NO	有效方法
+workingType	ENUM	NO	stopPrice 触发类型: MARK_PRICE(标记价格), CONTRACT_PRICE(合约最新价). 默认 CONTRACT_PRICE
+priceProtect	STRING	NO	条件单触发保护："TRUE","FALSE", 默认"FALSE". 仅 STOP, STOP_MARKET, TAKE_PROFIT, TAKE_PROFIT_MARKET 需要此参数
+newOrderRespType	ENUM	NO	"ACK", "RESULT", 默认 "ACK"
+priceMatch	ENUM	NO	OPPONENT/ OPPONENT_5/ OPPONENT_10/ OPPONENT_20/QUEUE/ QUEUE_5/ QUEUE_10/ QUEUE_20；不能与price同时传
+selfTradePreventionMode	ENUM	NO	EXPIRE_TAKER/ EXPIRE_MAKER/ EXPIRE_BOTH； 默认NONE
+goodTillDate	LONG	NO	TIF为GTD时订单的自动取消时间， 当timeInforce为GTD时必传；传入的时间戳仅保留秒级精度，毫秒级部分会被自动忽略，时间戳需大于当前时间+600s且小于253402300799000
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+根据 order type的不同，某些参数强制要求，具体如下:
+
+Type	强制要求的参数
+LIMIT	timeInForce, quantity, price
+MARKET	quantity
+STOP, TAKE_PROFIT	quantity, price, stopPrice
+STOP_MARKET, TAKE_PROFIT_MARKET	stopPrice
+TRAILING_STOP_MARKET	callbackRate
+条件单的触发必须:
+
+如果订单参数priceProtect为true:
+达到触发价时，MARK_PRICE(标记价格)与CONTRACT_PRICE(合约最新价)之间的价差不能超过改symbol触发保护阈值
+触发保护阈值请参考接口GET /fapi/v1/exchangeInfo 返回内容相应symbol中"triggerProtect"字段
+STOP, STOP_MARKET 止损单:
+买入: 最新合约价格/标记价格高于等于触发价stopPrice
+卖出: 最新合约价格/标记价格低于等于触发价stopPrice
+TAKE_PROFIT, TAKE_PROFIT_MARKET 止盈单:
+买入: 最新合约价格/标记价格低于等于触发价stopPrice
+卖出: 最新合约价格/标记价格高于等于触发价stopPrice
+TRAILING_STOP_MARKET 跟踪止损单:
+买入: 当合约价格/标记价格区间最低价格低于激活价格activationPrice,且最新合约价格/标记价高于等于最低价设定回调幅度。
+卖出: 当合约价格/标记价格区间最高价格高于激活价格activationPrice,且最新合约价格/标记价低于等于最高价设定回调幅度。
+TRAILING_STOP_MARKET 跟踪止损单如果遇到报错 {"code": -2021, "msg": "Order would immediately trigger."}
+表示订单不满足以下条件:
+
+买入: 指定的activationPrice 必须小于 latest price
+卖出: 指定的activationPrice 必须大于 latest price
+newOrderRespType 如果传 RESULT:
+
+MARKET 订单将直接返回成交结果；
+配合使用特殊 timeInForce 的 LIMIT 订单将直接返回成交或过期拒绝结果。
+STOP_MARKET, TAKE_PROFIT_MARKET 配合 closePosition=true:
+
+条件单触发依照上述条件单触发逻辑
+条件触发后，平掉当时持有所有多头仓位(若为卖单)或当时持有所有空头仓位(若为买单)
+不支持 quantity 参数
+自带只平仓属性，不支持reduceOnly参数
+双开模式下,LONG方向上不支持BUY; SHORT 方向上不支持SELL
+selfTradePreventionMode 仅在 timeInForce为IOC或GTC或GTD时生效.
+
+极端行情时，timeInForce为GTD的订单自动取消可能有一定延迟
+
+响应示例
+{
+ 	"clientOrderId": "testOrder", // 用户自定义的订单号
+ 	"cumQty": "0",
+ 	"cumQuote": "0", // 成交金额
+ 	"executedQty": "0", // 成交量
+ 	"orderId": 22542179, // 系统订单号
+ 	"avgPrice": "0.00000",	// 平均成交价
+ 	"origQty": "10", // 原始委托数量
+ 	"price": "0", // 委托价格
+ 	"reduceOnly": false, // 仅减仓
+ 	"side": "SELL", // 买卖方向
+ 	"positionSide": "SHORT", // 持仓方向
+ 	"status": "NEW", // 订单状态
+ 	"stopPrice": "0", // 触发价，对`TRAILING_STOP_MARKET`无效
+ 	"closePosition": false,   // 是否条件全平仓
+ 	"symbol": "BTCUSDT", // 交易对
+ 	"timeInForce": "GTD", // 有效方法
+ 	"type": "TRAILING_STOP_MARKET", // 订单类型
+ 	"origType": "TRAILING_STOP_MARKET",  // 触发前订单类型
+ 	"activatePrice": "9020", // 跟踪止损激活价格, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+  	"priceRate": "0.3",	// 跟踪止损回调比例, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+ 	"updateTime": 1566818724722, // 更新时间
+ 	"workingType": "CONTRACT_PRICE", // 条件价格触发类型
+ 	"priceProtect": false,            // 是否开启条件单触发保护
+ 	"priceMatch": "NONE",              //盘口价格下单模式
+ 	"selfTradePreventionMode": "NONE", //订单自成交保护模式
+ 	"goodTillDate": 1693207680000      //订单TIF为GTD时的自动取消时间
+}
+
+U本位合约交易接口REST API批量下单(TRADE)
+批量下单(TRADE)
+接口描述
+批量下单
+
+HTTP请求
+POST /fapi/v1/batchOrders
+
+请求权重
+10s order rate limit(X-MBX-ORDER-COUNT-10S)为5; 1min order rate limit(X-MBX-ORDER-COUNT-1M)为1; IP rate limit(x-mbx-used-weight-1m)为5;
+
+请求参数
+名称	类型	是否必需	描述
+batchOrders	list<JSON>	YES	订单列表，最多支持5个订单
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+其中batchOrders应以list of JSON格式填写订单参数
+
+例子: /fapi/v1/batchOrders?batchOrders=[{"type":"LIMIT","timeInForce":"GTC",
+"symbol":"BTCUSDT","side":"BUY","price":"10001","quantity":"0.001"}]
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+side	ENUM	YES	买卖方向 SELL, BUY
+positionSide	ENUM	NO	持仓方向，单向持仓模式下非必填，默认且仅可填BOTH;在双向持仓模式下必填,且仅可选择 LONG 或 SHORT
+type	ENUM	YES	订单类型 LIMIT, MARKET, STOP, TAKE_PROFIT, STOP_MARKET, TAKE_PROFIT_MARKET, TRAILING_STOP_MARKET
+reduceOnly	STRING	NO	true, false; 非双开模式下默认false；双开模式下不接受此参数。
+quantity	DECIMAL	YES	下单数量
+price	DECIMAL	NO	委托价格
+newClientOrderId	STRING	NO	用户自定义的订单号，不可以重复出现在挂单中。如空缺系统会自动赋值. 必须满足正则规则 ^[\.A-Z\:/a-z0-9_-]{1,36}$
+stopPrice	DECIMAL	NO	触发价, 仅 STOP, STOP_MARKET, TAKE_PROFIT, TAKE_PROFIT_MARKET 需要此参数
+activationPrice	DECIMAL	NO	追踪止损激活价格，仅TRAILING_STOP_MARKET 需要此参数, 默认为下单当前市场价格(支持不同workingType)
+callbackRate	DECIMAL	NO	追踪止损回调比例，可取值范围[0.1, 4],其中 1代表1% ,仅TRAILING_STOP_MARKET 需要此参数
+timeInForce	ENUM	NO	有效方法
+workingType	ENUM	NO	stopPrice 触发类型: MARK_PRICE(标记价格), CONTRACT_PRICE(合约最新价). 默认 CONTRACT_PRICE
+priceProtect	STRING	NO	条件单触发保护："TRUE","FALSE", 默认"FALSE". 仅 STOP, STOP_MARKET, TAKE_PROFIT, TAKE_PROFIT_MARKET 需要此参数
+newOrderRespType	ENUM	NO	"ACK", "RESULT", 默认 "ACK"
+priceMatch	ENUM	NO	OPPONENT/ OPPONENT_5/ OPPONENT_10/ OPPONENT_20/QUEUE/ QUEUE_5/ QUEUE_10/ QUEUE_20；不能与price同时传
+selfTradePreventionMode	ENUM	NO	EXPIRE_TAKER/ EXPIRE_MAKER/ EXPIRE_BOTH； 默认NONE
+goodTillDate	LONG	NO	TIF为GTD时订单的自动取消时间， 当timeInforce为GTD时必传；传入的时间戳仅保留秒级精度，毫秒级部分会被自动忽略，时间戳需大于当前时间+600s且小于253402300799000
+具体订单条件规则，与普通下单一致
+批量下单采取并发处理，不保证订单撮合顺序
+批量下单的返回内容顺序，与订单列表顺序一致
+响应示例
+[
+	{
+	 	"clientOrderId": "testOrder", // 用户自定义的订单号
+	 	"cumQty": "0",
+	 	"cumQuote": "0", // 成交金额
+	 	"executedQty": "0", // 成交量
+	 	"orderId": 22542179, // 系统订单号
+	 	"avgPrice": "0.00000",	// 平均成交价
+	 	"origQty": "10", // 原始委托数量
+	 	"price": "0", // 委托价格
+	 	"reduceOnly": false, // 仅减仓
+	 	"side": "SELL", // 买卖方向
+	 	"positionSide": "SHORT", // 持仓方向
+	 	"status": "NEW", // 订单状态
+	 	"stopPrice": "0", // 触发价，对`TRAILING_STOP_MARKET`无效
+	 	"closePosition": false,   // 是否条件全平仓
+	 	"symbol": "BTCUSDT", // 交易对
+	 	"timeInForce": "GTC", // 有效方法
+	 	"type": "TRAILING_STOP_MARKET", // 订单类型
+	 	"origType": "TRAILING_STOP_MARKET",  // 触发前订单类型
+	 	"activatePrice": "9020", // 跟踪止损激活价格, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+	  	"priceRate": "0.3",	// 跟踪止损回调比例, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+	 	"updateTime": 1566818724722, // 更新时间
+	 	"workingType": "CONTRACT_PRICE", // 条件价格触发类型
+	 	"priceProtect": false,            // 是否开启条件单触发保护
+ 		"priceMatch": "NONE",              //盘口价格下单模式
+ 		"selfTradePreventionMode": "NONE", //订单自成交保护模式
+ 		"goodTillDate": 1693207680000      //订单TIF为GTD时的自动取消时间
+	},
+	{
+		"code": -2022, 
+		"msg": "ReduceOnly Order is rejected."
+	}
+]
+
+U本位合约交易接口REST API修改订单(TRADE)
+修改订单 (TRADE)
+接口描述
+修改订单功能，当前只支持限价（LIMIT）订单修改，修改后会在撮合队列里重新排序
+
+HTTP请求
+PUT /fapi/v1/order
+
+请求权重
+10s order rate limit(X-MBX-ORDER-COUNT-10S)为1; 1min order rate limit(X-MBX-ORDER-COUNT-1M)为1; IP rate limit(x-mbx-used-weight-1m)为1
+
+请求参数
+名称	类型	是否必需	描述
+orderId	LONG	NO	系统订单号
+origClientOrderId	STRING	NO	用户自定义的订单号
+symbol	STRING	YES	交易对
+side	ENUM	YES	买卖方向 SELL, BUY
+quantity	DECIMAL	YES	下单数量,使用closePosition不支持此参数。
+price	DECIMAL	YES	委托价格
+priceMatch	ENUM	NO	OPPONENT/ OPPONENT_5/ OPPONENT_10/ OPPONENT_20/QUEUE/ QUEUE_5/ QUEUE_10/ QUEUE_20；不能与price同时传
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+orderId 与 origClientOrderId 必须至少发送一个，同时发送则以 order id为准
+quantity 与 price 均必须发送，这点和 dapi 修改订单不同
+当新订单的quantity 或 price不满足PRICE_FILTER / PERCENT_FILTER / LOT_SIZE限制，修改会被拒绝，原订单依旧被保留
+订单会在下列情况下被取消：
+原订单被部分执行且新订单quantity <= executedQty
+原订单是GTX，新订单的价格会导致订单立刻执行
+同一订单修改次数最多10000次
+响应示例
+{
+ 	"orderId": 20072994037,
+ 	"symbol": "BTCUSDT",
+ 	"pair": "BTCUSDT",
+ 	"status": "NEW",
+ 	"clientOrderId": "LJ9R4QZDihCaS8UAOOLpgW",
+ 	"price": "30005",
+ 	"avgPrice": "0.0",
+ 	"origQty": "1",
+ 	"executedQty": "0",
+ 	"cumQty": "0",
+ 	"cumBase": "0",
+ 	"timeInForce": "GTC",
+ 	"type": "LIMIT",
+ 	"reduceOnly": false,
+ 	"closePosition": false,
+ 	"side": "BUY",
+ 	"positionSide": "LONG",
+ 	"stopPrice": "0",
+ 	"workingType": "CONTRACT_PRICE",
+ 	"priceProtect": false,
+ 	"origType": "LIMIT",
+    "priceMatch": "NONE",              //盘口价格下单模式
+    "selfTradePreventionMode": "NONE", //订单自成交保护模式
+    "goodTillDate": 0,                 //订单TIF为GTD时的自动取消时间
+ 	"updateTime": 1629182711600
+}
+
+U本位合约交易接口REST API批量修改订单(TRADE)
+批量修改订单(TRADE)
+接口描述
+批量修改订单
+
+HTTP请求
+PUT /fapi/v1/batchOrders
+
+请求权重
+10s order rate limit(X-MBX-ORDER-COUNT-10S)为5; 1min order rate limit(X-MBX-ORDER-COUNT-1M)为1; IP rate limit(x-mbx-used-weight-1m)为5;
+
+请求参数
+名称	类型	是否必需	描述
+batchOrders	list<JSON>	YES	订单列表,最多支持5个订单
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+其中batchOrders应以list of JSON格式填写订单参数
+
+名称	类型	是否必需	描述
+orderId	LONG	NO	系统订单号，orderId 与 origClientOrderId 至少要传一个
+origClientOrderId	STRING	NO	用户自定义的订单号，orderId 与 origClientOrderId 至少要传一个
+symbol	STRING	YES	交易对
+side	ENUM	YES	买卖方向 SELL, BUY
+quantity	DECIMAL	YES	下单数量,使用closePosition不支持此参数。
+price	DECIMAL	YES	委托价格
+priceMatch	ENUM	NO	OPPONENT/ OPPONENT_5/ OPPONENT_10/ OPPONENT_20/QUEUE/ QUEUE_5/ QUEUE_10/ QUEUE_20；不能与price同时传
+stopPrice	DECIMAL	NO	触发价, 仅 STOP, STOP_MARKET, TAKE_PROFIT, TAKE_PROFIT_MARKET 需要此参数
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+具体订单条件规则,与普通修改订单一致
+批量修改订单采取并发处理,不保证订单撮合顺序
+批量修改订单的返回内容顺序,与订单列表顺序一致
+同一订单修改次数最多10000次
+响应示例
+[
+	{
+		"orderId": 20072994037,
+		"symbol": "BTCUSDT",
+		"pair": "BTCUSDT",
+		"status": "NEW",
+		"clientOrderId": "LJ9R4QZDihCaS8UAOOLpgW",
+		"price": "30005",
+		"avgPrice": "0.0",
+		"origQty": "1",
+		"executedQty": "0",
+		"cumQty": "0",
+		"cumBase": "0",
+		"timeInForce": "GTC",
+		"type": "LIMIT",
+		"reduceOnly": false,
+		"closePosition": false,
+		"side": "BUY",
+		"positionSide": "LONG",
+		"stopPrice": "0",
+		"workingType": "CONTRACT_PRICE",
+		"priceProtect": false,
+		"origType": "LIMIT",
+        "priceMatch": "NONE",              //盘口价格下单模式
+        "selfTradePreventionMode": "NONE", //订单自成交保护模式
+        "goodTillDate": 0,                 //订单TIF为GTD时的自动取消时间
+		"updateTime": 1629182711600
+	},
+	{
+		"code": -2022, 
+		"msg": "ReduceOnly Order is rejected."
+	}
+]
+
+U本位合约交易接口REST API查询订单修改历史(USER-DATA)
+查询订单修改历史 (USER_DATA)
+接口描述
+查询订单修改历史
+
+HTTP请求
+GET /fapi/v1/orderAmendment
+
+请求权重
+1
+
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+orderId	LONG	NO	系统订单号
+origClientOrderId	STRING	NO	用户自定义的订单号
+startTime	LONG	NO	起始时间
+endTime	LONG	NO	结束时间
+limit	INT	NO	返回的结果集数量 默认值:50 最大值:100
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+至少需要发送 orderId 与 origClientOrderId中的一个，同时发送则以 orderId 为准
+接口仅保留最近三个月订单修改历史
+响应示例
+[
+    {
+        "amendmentId": 5363,	// 修改记录号
+        "symbol": "BTCUSDT",
+        "pair": "BTCUSDT",
+        "orderId": 20072994037,
+        "clientOrderId": "LJ9R4QZDihCaS8UAOOLpgW",
+        "time": 1629184560899,	// 修改时间
+        "amendment": {
+            "price": {
+                "before": "30004",
+                "after": "30003.2"
+            },
+            "origQty": {
+                "before": "1",
+                "after": "1"
+            },
+            "count": 3	// 修改记数，代表该修改记录是这笔订单第几次修改
+        }
+    },
+    {
+        "amendmentId": 5361,
+        "symbol": "BTCUSDT",
+        "pair": "BTCUSDT",
+        "orderId": 20072994037,
+        "clientOrderId": "LJ9R4QZDihCaS8UAOOLpgW",
+        "time": 1629184533946,
+        "amendment": {
+            "price": {
+                "before": "30005",
+                "after": "30004"
+            },
+            "origQty": {
+                "before": "1",
+                "after": "1"
+            },
+            "count": 2
+        }
+    },
+    {
+        "amendmentId": 5325,
+        "symbol": "BTCUSDT",
+        "pair": "BTCUSDT",
+        "orderId": 20072994037,
+        "clientOrderId": "LJ9R4QZDihCaS8UAOOLpgW",
+        "time": 1629182711787,
+        "amendment": {
+            "price": {
+                "before": "30002",
+                "after": "30005"
+            },
+            "origQty": {
+                "before": "1",
+                "after": "1"
+            },
+            "count": 1
+        }
+    }
+]
+
+U本位合约交易接口REST API撤销订单(TRADE)
+撤销订单 (TRADE)
+接口描述
+撤销订单
+
+HTTP请求
+DELETE /fapi/v1/order
+
+请求权重
+1
+
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+orderId	LONG	NO	系统订单号
+origClientOrderId	STRING	NO	用户自定义的订单号
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+orderId 与 origClientOrderId 必须至少发送一个
+响应示例
+{
+ 	"clientOrderId": "myOrder1", // 用户自定义的订单号
+ 	"cumQty": "0",
+ 	"cumQuote": "0", // 成交金额
+ 	"executedQty": "0", // 成交量
+ 	"orderId": 283194212, // 系统订单号
+ 	"origQty": "11", // 原始委托数量
+ 	"price": "0", // 委托价格
+	"reduceOnly": false, // 仅减仓
+	"side": "BUY", // 买卖方向
+	"positionSide": "SHORT", // 持仓方向
+ 	"status": "CANCELED", // 订单状态
+ 	"stopPrice": "9300", // 触发价，对`TRAILING_STOP_MARKET`无效
+ 	"closePosition": false,   // 是否条件全平仓
+ 	"symbol": "BTCUSDT", // 交易对
+ 	"timeInForce": "GTC", // 有效方法
+ 	"origType": "TRAILING_STOP_MARKET",	// 触发前订单类型
+ 	"type": "TRAILING_STOP_MARKET", // 订单类型
+ 	"activatePrice": "9020", // 跟踪止损激活价格, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+  	"priceRate": "0.3",	// 跟踪止损回调比例, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+ 	"updateTime": 1571110484038, // 更新时间
+ 	"workingType": "CONTRACT_PRICE", // 条件价格触发类型
+ 	"priceProtect": false,            // 是否开启条件单触发保护
+  	"priceMatch": "NONE",              //盘口价格下单模式
+  	"selfTradePreventionMode": "NONE", //订单自成交保护模式
+  	"goodTillDate": 0      //订单TIF为GTD时的自动取消时间
+}
+
+U本位合约交易接口REST API批量撤销订单(TRADE)
+批量撤销订单(TRADE)
+接口描述
+批量撤销订单 (TRADE)
+
+HTTP Request
+DELETE /fapi/v1/batchOrders
+
+请求权重
+1
+
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+orderIdList	LIST<LONG>	NO	系统订单号, 最多支持10个订单
+
+比如[1234567,2345678]
+origClientOrderIdList	LIST<STRING>	NO	用户自定义的订单号, 最多支持10个订单
+
+比如["my_id_1","my_id_2"] 需要encode双引号。逗号后面没有空格。
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+orderIdList 与 origClientOrderIdList 必须至少发送一个，不可同时发送
+Response Example
+[
+	{
+	 	"clientOrderId": "myOrder1", // 用户自定义的订单号
+	 	"cumQty": "0",
+	 	"cumQuote": "0", // 成交金额
+	 	"executedQty": "0", // 成交量
+	 	"orderId": 283194212, // 系统订单号
+	 	"origQty": "11", // 原始委托数量
+	 	"price": "0", // 委托价格
+		"reduceOnly": false, // 仅减仓
+		"side": "BUY", // 买卖方向
+		"positionSide": "SHORT", // 持仓方向
+	 	"status": "CANCELED", // 订单状态
+	 	"stopPrice": "9300", // 触发价，对`TRAILING_STOP_MARKET`无效
+	 	"closePosition": false,   // 是否条件全平仓
+	 	"symbol": "BTCUSDT", // 交易对
+	 	"timeInForce": "GTC", // 有效方法
+	 	"origType": "TRAILING_STOP_MARKET", // 触发前订单类型
+ 		"type": "TRAILING_STOP_MARKET", // 订单类型
+	 	"activatePrice": "9020", // 跟踪止损激活价格, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+  		"priceRate": "0.3",	// 跟踪止损回调比例, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+	 	"updateTime": 1571110484038, // 更新时间
+	 	"workingType": "CONTRACT_PRICE", // 条件价格触发类型
+	 	"priceProtect": false            // 是否开启条件单触发保护
+	 	"priceMatch": "NONE",              //盘口价格下单模式
+	 	"selfTradePreventionMode": "NONE", //订单自成交保护模式
+ 		"goodTillDate": 0      //订单TIF为GTD时的自动取消时间
+	},
+	{
+		"code": -2011,
+		"msg": "Unknown order sent."
+	}
+]
+
+U本位合约交易接口REST API撤销全部订单(TRADE)
+撤销全部订单(TRADE)
+接口描述
+撤销全部订单 (TRADE)
+
+HTTP请求
+DELETE /fapi/v1/allOpenOrders
+
+请求权重
+1
+
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+响应示例
+{
+	"code": 200, 
+	"msg": "The operation of cancel all open order is done."
+}
+
+U本位合约交易接口REST API查询订单(USER-DATA)
+查询订单 (USER_DATA)
+接口描述
+查询订单状态
+
+请注意，如果订单满足如下条件，不会被查询到：
+订单的最终状态为 CANCELED 或者 EXPIRED 并且 订单没有任何的成交记录 并且 订单生成时间 + 3天 < 当前时间
+订单创建时间 + 90天 < 当前时间
+HTTP请求
+GET /fapi/v1/order
+
+请求权重
+1
+
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+orderId	LONG	NO	系统订单号
+origClientOrderId	STRING	NO	用户自定义的订单号
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+注意:
+
+至少需要发送 orderId 与 origClientOrderId中的一个
+orderId在symbol维度是自增的
+响应示例
+{
+  	"avgPrice": "0.00000",				// 平均成交价
+  	"clientOrderId": "abc",				// 用户自定义的订单号
+  	"cumQuote": "0",					// 成交金额
+  	"executedQty": "0",					// 成交量
+  	"orderId": 1573346959,				// 系统订单号
+  	"origQty": "0.40",					// 原始委托数量
+  	"origType": "TRAILING_STOP_MARKET",	// 触发前订单类型
+  	"price": "0",						// 委托价格
+  	"reduceOnly": false,				// 是否仅减仓
+  	"side": "BUY",						// 买卖方向
+  	"positionSide": "SHORT", 			// 持仓方向
+  	"status": "NEW",					// 订单状态
+  	"stopPrice": "9300",			    // 触发价，对`TRAILING_STOP_MARKET`无效
+  	"closePosition": false,             // 是否条件全平仓
+  	"symbol": "BTCUSDT",				// 交易对
+  	"time": 1579276756075,				// 订单时间
+  	"timeInForce": "GTC",				// 有效方法
+  	"type": "TRAILING_STOP_MARKET",		// 订单类型
+  	"activatePrice": "9020",			// 跟踪止损激活价格, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+  	"priceRate": "0.3",					// 跟踪止损回调比例, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+  	"updateTime": 1579276756075,		// 更新时间
+  	"workingType": "CONTRACT_PRICE",    // 条件价格触发类型
+ 	"priceProtect": false,              // 是否开启条件单触发保护
+    "priceMatch": "NONE",               //盘口价格下单模式
+    "selfTradePreventionMode": "NONE",  //订单自成交保护模式
+    "goodTillDate": 0                   //订单TIF为GTD时的自动取消时间
+}
+
+U本位合约交易接口REST API账户成交历史(USER-DATA)
+账户成交历史 (USER_DATA)
+接口描述
+获取某交易对的成交历史
+
+HTTP请求
+GET /fapi/v1/userTrades
+
+请求权重
+5
+
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+orderId	LONG	NO	必须要和参数symbol一起使用
+startTime	LONG	NO	起始时间
+endTime	LONG	NO	结束时间
+fromId	LONG	NO	返回该fromId及之后的成交，缺省返回最近的成交
+limit	INT	NO	返回的结果集数量 默认值:500 最大值:1000.
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+如果startTime 和 endTime 均未发送, 只会返回最近7天的数据。
+startTime 和 endTime 的最大间隔为7天
+本接口仅支持最近6个月历史交易的查询
+响应示例
+[
+  {
+  	"buyer": false,	// 是否是买方
+  	"commission": "-0.07819010", // 手续费
+  	"commissionAsset": "USDT", // 手续费计价单位
+  	"id": 698759,	// 交易ID
+  	"maker": false,	// 是否是挂单方
+  	"orderId": 25851813, // 订单编号
+  	"price": "7819.01",	// 成交价
+  	"qty": "0.002",	// 成交量
+  	"quoteQty": "15.63802",	// 成交额
+  	"realizedPnl": "-0.91539999",	// 实现盈亏
+  	"side": "SELL",	// 买卖方向
+  	"positionSide": "SHORT",  // 持仓方向
+  	"symbol": "BTCUSDT", // 交易对
+  	"time": 1569514978020 // 时间
+  }
+]
+
+U本位合约交易接口REST API查询所有订单(包括历史订单)(USER-DATA)
+查询所有订单(包括历史订单) (USER_DATA)
+接口描述
+查询所有订单(包括历史订单)
+
+请注意，如果订单满足如下条件，不会被查询到：
+订单的最终状态为 CANCELED 或者 EXPIRED 并且 订单没有任何的成交记录 并且 订单生成时间 + 3天 < 当前时间
+订单创建时间 + 90天 < 当前时间
+HTTP请求
+GET /fapi/v1/allOrders
+
+请求权重
+5
+
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+orderId	LONG	NO	只返回此orderID及之后的订单，缺省返回最近的订单
+startTime	LONG	NO	起始时间
+endTime	LONG	NO	结束时间
+limit	INT	NO	返回的结果集数量 默认值:500 最大值:1000
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+查询时间范围最大不得超过7天
+默认查询最近7天内的数据
+响应示例
+[
+  {
+   	"avgPrice": "0.00000",				// 平均成交价
+  	"clientOrderId": "abc",				// 用户自定义的订单号
+  	"cumQuote": "0",						// 成交金额
+  	"executedQty": "0",					// 成交量
+  	"orderId": 1917641,					// 系统订单号
+  	"origQty": "0.40",					// 原始委托数量
+  	"origType": "TRAILING_STOP_MARKET",	// 触发前订单类型
+  	"price": "0",					// 委托价格
+  	"reduceOnly": false,				// 是否仅减仓
+  	"side": "BUY",						// 买卖方向
+  	"positionSide": "SHORT", // 持仓方向
+  	"status": "NEW",					// 订单状态
+  	"stopPrice": "9300",					// 触发价，对`TRAILING_STOP_MARKET`无效
+  	"closePosition": false,  			// 是否条件全平仓
+  	"symbol": "BTCUSDT",				// 交易对
+  	"time": 1579276756075,				// 订单时间
+  	"timeInForce": "GTC",				// 有效方法
+  	"type": "TRAILING_STOP_MARKET",		// 订单类型
+  	"activatePrice": "9020", // 跟踪止损激活价格, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+  	"priceRate": "0.3",	// 跟踪止损回调比例, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+  	"updateTime": 1579276756075,		// 更新时间
+  	"workingType": "CONTRACT_PRICE", // 条件价格触发类型
+ 	"priceProtect": false,           // 是否开启条件单触发保护
+ 	"priceMatch": "NONE",              //盘口价格下单模式
+ 	"selfTradePreventionMode": "NONE", //订单自成交保护模式
+ 	"goodTillDate": 0      //订单TIF为GTD时的自动取消时间
+  }
+]
+
+U本位合约交易接口REST API查看当前全部挂单(USER-DATA)
+查看当前全部挂单 (USER_DATA)
+接口描述
+查看当前全部挂单
+
+HTTP请求
+GET /fapi/v1/openOrders
+
+请求权重
+带symbol 1
+不带 40 请小心使用不带symbol参数的调用
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	NO	交易对
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+不带symbol参数，会返回所有交易对的挂单
+响应示例
+[
+  {
+  	"avgPrice": "0.00000",				// 平均成交价
+  	"clientOrderId": "abc",				// 用户自定义的订单号
+  	"cumQuote": "0",						// 成交金额
+  	"executedQty": "0",					// 成交量
+  	"orderId": 1917641,					// 系统订单号
+  	"origQty": "0.40",					// 原始委托数量
+  	"origType": "TRAILING_STOP_MARKET",	// 触发前订单类型
+  	"price": "0",					// 委托价格
+  	"reduceOnly": false,				// 是否仅减仓
+  	"side": "BUY",						// 买卖方向
+  	"positionSide": "SHORT", // 持仓方向
+  	"status": "NEW",					// 订单状态
+  	"stopPrice": "9300",					// 触发价，对`TRAILING_STOP_MARKET`无效
+  	"closePosition": false,   // 是否条件全平仓
+  	"symbol": "BTCUSDT",				// 交易对
+  	"time": 1579276756075,				// 订单时间
+  	"timeInForce": "GTC",				// 有效方法
+  	"type": "TRAILING_STOP_MARKET",		// 订单类型
+  	"activatePrice": "9020", // 跟踪止损激活价格, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+  	"priceRate": "0.3",	// 跟踪止损回调比例, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+  	"updateTime": 1579276756075,		// 更新时间
+  	"workingType": "CONTRACT_PRICE", // 条件价格触发类型
+ 	"priceProtect": false,           // 是否开启条件单触发保护
+	"priceMatch": "NONE",              //price match mode
+    "selfTradePreventionMode": "NONE", //self trading preventation mode
+    "goodTillDate": 0      //order pre-set auot cancel time for TIF GTD order
+  }
+]
+
+U本位合约交易接口REST API查询当前挂单(USER-DATA)
+查询当前挂单 (USER_DATA)
+接口描述
+请小心使用不带symbol参数的调用
+
+HTTP请求
+GET /fapi/v1/openOrder
+
+请求权重
+1
+
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+orderId	LONG	NO	系统订单号
+origClientOrderId	STRING	NO	用户自定义的订单号
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+orderId 与 origClientOrderId 中的一个为必填参数
+查询的订单如果已经成交或取消，将返回报错 "Order does not exist."
+响应示例
+{
+  	"avgPrice": "0.00000",				// 平均成交价
+  	"clientOrderId": "abc",				// 用户自定义的订单号
+  	"cumQuote": "0",						// 成交金额
+  	"executedQty": "0",					// 成交量
+  	"orderId": 1917641,					// 系统订单号
+  	"origQty": "0.40",					// 原始委托数量
+  	"origType": "TRAILING_STOP_MARKET",	// 触发前订单类型
+  	"price": "0",					// 委托价格
+  	"reduceOnly": false,				// 是否仅减仓
+  	"side": "BUY",						// 买卖方向
+  	"status": "NEW",					// 订单状态
+  	"positionSide": "SHORT", // 持仓方向
+  	"stopPrice": "9300",					// 触发价，对`TRAILING_STOP_MARKET`无效
+  	"closePosition": false,   // 是否条件全平仓
+  	"symbol": "BTCUSDT",				// 交易对
+  	"time": 1579276756075,				// 订单时间
+  	"timeInForce": "GTC",				// 有效方法
+  	"type": "TRAILING_STOP_MARKET",		// 订单类型
+  	"activatePrice": "9020", // 跟踪止损激活价格, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+  	"priceRate": "0.3",	// 跟踪止损回调比例, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+  	"updateTime": 1579276756075,		// 更新时间
+  	"workingType": "CONTRACT_PRICE", // 条件价格触发类型
+ 	"priceProtect": false,            // 是否开启条件单触发保护
+	"priceMatch": "NONE",              // 盘口价格下单模式
+    "selfTradePreventionMode": "NONE", // 订单自成交保护模式
+    "goodTillDate": 0                  // 订单TIF为GTD时的自动取消时间		
+}
+
+U本位合约交易接口REST API账户成交历史(USER-DATA)
+账户成交历史 (USER_DATA)
+接口描述
+获取某交易对的成交历史
+
+HTTP请求
+GET /fapi/v1/userTrades
+
+请求权重
+5
+
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+orderId	LONG	NO	必须要和参数symbol一起使用
+startTime	LONG	NO	起始时间
+endTime	LONG	NO	结束时间
+fromId	LONG	NO	返回该fromId及之后的成交，缺省返回最近的成交
+limit	INT	NO	返回的结果集数量 默认值:500 最大值:1000.
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+如果startTime 和 endTime 均未发送, 只会返回最近7天的数据。
+startTime 和 endTime 的最大间隔为7天
+本接口仅支持最近6个月历史交易的查询
+响应示例
+[
+  {
+  	"buyer": false,	// 是否是买方
+  	"commission": "-0.07819010", // 手续费
+  	"commissionAsset": "USDT", // 手续费计价单位
+  	"id": 698759,	// 交易ID
+  	"maker": false,	// 是否是挂单方
+  	"orderId": 25851813, // 订单编号
+  	"price": "7819.01",	// 成交价
+  	"qty": "0.002",	// 成交量
+  	"quoteQty": "15.63802",	// 成交额
+  	"realizedPnl": "-0.91539999",	// 实现盈亏
+  	"side": "SELL",	// 买卖方向
+  	"positionSide": "SHORT",  // 持仓方向
+  	"symbol": "BTCUSDT", // 交易对
+  	"time": 1569514978020 // 时间
+  }
+]
+
+U本位合约交易接口REST API下单测试(TRADE)
+下单测试 (TRADE)
+接口描述
+用于测试订单请求，但不会提交到撮合引擎
+
+HTTP请求
+POST /fapi/v1/order/test
+
+请求参数
+名称	类型	是否必需	描述
+symbol	STRING	YES	交易对
+side	ENUM	YES	买卖方向 SELL, BUY
+positionSide	ENUM	NO	持仓方向，单向持仓模式下非必填，默认且仅可填BOTH;在双向持仓模式下必填,且仅可选择 LONG 或 SHORT
+type	ENUM	YES	订单类型 LIMIT, MARKET, STOP, TAKE_PROFIT, STOP_MARKET, TAKE_PROFIT_MARKET, TRAILING_STOP_MARKET
+reduceOnly	STRING	NO	true, false; 非双开模式下默认false；双开模式下不接受此参数； 使用closePosition不支持此参数。
+quantity	DECIMAL	NO	下单数量,使用closePosition不支持此参数。
+price	DECIMAL	NO	委托价格
+newClientOrderId	STRING	NO	用户自定义的订单号，不可以重复出现在挂单中。如空缺系统会自动赋值。必须满足正则规则 ^[\.A-Z\:/a-z0-9_-]{1,36}$
+stopPrice	DECIMAL	NO	触发价, 仅 STOP, STOP_MARKET, TAKE_PROFIT, TAKE_PROFIT_MARKET 需要此参数
+closePosition	STRING	NO	true, false；触发后全部平仓，仅支持STOP_MARKET和TAKE_PROFIT_MARKET；不与quantity合用；自带只平仓效果，不与reduceOnly 合用
+activationPrice	DECIMAL	NO	追踪止损激活价格，仅TRAILING_STOP_MARKET 需要此参数, 默认为下单当前市场价格(支持不同workingType)
+callbackRate	DECIMAL	NO	追踪止损回调比例，可取值范围[0.1, 5],其中 1代表1% ,仅TRAILING_STOP_MARKET 需要此参数
+timeInForce	ENUM	NO	有效方法
+workingType	ENUM	NO	stopPrice 触发类型: MARK_PRICE(标记价格), CONTRACT_PRICE(合约最新价). 默认 CONTRACT_PRICE
+priceProtect	STRING	NO	条件单触发保护："TRUE","FALSE", 默认"FALSE". 仅 STOP, STOP_MARKET, TAKE_PROFIT, TAKE_PROFIT_MARKET 需要此参数
+newOrderRespType	ENUM	NO	"ACK", "RESULT", 默认 "ACK"
+priceMatch	ENUM	NO	OPPONENT/ OPPONENT_5/ OPPONENT_10/ OPPONENT_20/QUEUE/ QUEUE_5/ QUEUE_10/ QUEUE_20；不能与price同时传
+selfTradePreventionMode	ENUM	NO	NONE / EXPIRE_TAKER/ EXPIRE_MAKER/ EXPIRE_BOTH； 默认NONE
+goodTillDate	LONG	NO	TIF为GTD时订单的自动取消时间， 当timeInforce为GTD时必传；传入的时间戳仅保留秒级精度，毫秒级部分会被自动忽略，时间戳需大于当前时间+600s且小于253402300799000
+recvWindow	LONG	NO	
+timestamp	LONG	YES	
+根据 order type的不同，某些参数强制要求，具体如下:
+
+Type	强制要求的参数
+LIMIT	timeInForce, quantity, price
+MARKET	quantity
+STOP, TAKE_PROFIT	quantity, price, stopPrice
+STOP_MARKET, TAKE_PROFIT_MARKET	stopPrice
+TRAILING_STOP_MARKET	callbackRate
+条件单的触发必须:
+
+如果订单参数priceProtect为true:
+达到触发价时，MARK_PRICE(标记价格)与CONTRACT_PRICE(合约最新价)之间的价差不能超过改symbol触发保护阈值
+触发保护阈值请参考接口GET /fapi/v1/exchangeInfo 返回内容相应symbol中"triggerProtect"字段
+STOP, STOP_MARKET 止损单:
+买入: 最新合约价格/标记价格高于等于触发价stopPrice
+卖出: 最新合约价格/标记价格低于等于触发价stopPrice
+TAKE_PROFIT, TAKE_PROFIT_MARKET 止盈单:
+买入: 最新合约价格/标记价格低于等于触发价stopPrice
+卖出: 最新合约价格/标记价格高于等于触发价stopPrice
+TRAILING_STOP_MARKET 跟踪止损单:
+买入: 当合约价格/标记价格区间最低价格低于激活价格activationPrice,且最新合约价格/标记价高于等于最低价设定回调幅度。
+卖出: 当合约价格/标记价格区间最高价格高于激活价格activationPrice,且最新合约价格/标记价低于等于最高价设定回调幅度。
+TRAILING_STOP_MARKET 跟踪止损单如果遇到报错 {"code": -2021, "msg": "Order would immediately trigger."}
+表示订单不满足以下条件:
+
+买入: 指定的activationPrice 必须小于 latest price
+卖出: 指定的activationPrice 必须大于 latest price
+newOrderRespType 如果传 RESULT:
+
+MARKET 订单将直接返回成交结果；
+配合使用特殊 timeInForce 的 LIMIT 订单将直接返回成交或过期拒绝结果。
+STOP_MARKET, TAKE_PROFIT_MARKET 配合 closePosition=true:
+
+条件单触发依照上述条件单触发逻辑
+条件触发后，平掉当时持有所有多头仓位(若为卖单)或当时持有所有空头仓位(若为买单)
+不支持 quantity 参数
+自带只平仓属性，不支持reduceOnly参数
+双开模式下,LONG方向上不支持BUY; SHORT 方向上不支持SELL
+selfTradePreventionMode 仅在 timeInForce为IOC或GTC或GTD时生效.
+
+极端行情时，timeInForce为GTD的订单自动取消可能有一定延迟
+
+响应示例
+{
+ 	"clientOrderId": "testOrder", // 用户自定义的订单号
+ 	"cumQty": "0",
+ 	"cumQuote": "0", // 成交金额
+ 	"executedQty": "0", // 成交量
+ 	"orderId": 22542179, // 系统订单号
+ 	"avgPrice": "0.00000",	// 平均成交价
+ 	"origQty": "10", // 原始委托数量
+ 	"price": "0", // 委托价格
+ 	"reduceOnly": false, // 仅减仓
+ 	"side": "SELL", // 买卖方向
+ 	"positionSide": "SHORT", // 持仓方向
+ 	"status": "NEW", // 订单状态
+ 	"stopPrice": "0", // 触发价，对`TRAILING_STOP_MARKET`无效
+ 	"closePosition": false,   // 是否条件全平仓
+ 	"symbol": "BTCUSDT", // 交易对
+ 	"timeInForce": "GTD", // 有效方法
+ 	"type": "TRAILING_STOP_MARKET", // 订单类型
+ 	"origType": "TRAILING_STOP_MARKET",  // 触发前订单类型
+ 	"activatePrice": "9020", // 跟踪止损激活价格, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+  	"priceRate": "0.3",	// 跟踪止损回调比例, 仅`TRAILING_STOP_MARKET` 订单返回此字段
+ 	"updateTime": 1566818724722, // 更新时间
+ 	"workingType": "CONTRACT_PRICE", // 条件价格触发类型
+ 	"priceProtect": false,            // 是否开启条件单触发保护
+ 	"priceMatch": "NONE",              //盘口价格下单模式
+ 	"selfTradePreventionMode": "NONE", //订单自成交保护模式
+ 	"goodTillDate": 1693207680000      //订单TIF为GTD时的自动取消时间
+}
+
+
+
